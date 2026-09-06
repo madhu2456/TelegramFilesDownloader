@@ -1,5 +1,6 @@
 *.session*
-.env
+.env*
+!.env.example
 venv/
 .venv/
 downloads/
@@ -7,3 +8,12 @@ downloads/
 *.db
 __pycache__/
 *.png
+session/
+out/
+*.jpg
+*.jpeg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.vscode/
+.idea/
