@@ -1,0 +1,9 @@
+*.session*
+.env
+venv/
+.venv/
+downloads/
+*.part
+*.db
+__pycache__/
+*.png
