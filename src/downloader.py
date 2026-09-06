@@ -46,7 +46,7 @@ def _dt(s, name=None):
     if s is None: return None
     dt = s if isinstance(s, datetime) else None
     if dt is None:
-        try: dt = datetime.fromisoformat(str(s))
+        try: dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
         except (ValueError, TypeError):
             if name: raise SystemExit(f"invalid --{name} date: {s!r}")
             return None
@@ -78,10 +78,11 @@ async def download_chat(client, target, opts, out, conn) -> dict:
     ent = getattr(target, "entity", target); cid = int(getattr(ent, "id", 0) or 0)
     _dt(opts.after, "after"); _dt(opts.before, "before")
     log.info("start %s", scrub_for_log({"chat": str(getattr(ent, "id", ent)), "limit": lim})); precheck_disk(out, 1 << 20)
+    if opts.sync and opts.ids: log.warning("sync with explicit ids; checkpoint advance may be partial")
     eff = _ino(opts.min_id)
     if opts.sync:
         try: eff = max(int(eff or 0), int(get_sync_checkpoint(conn, cid) or 0)) or None
-        except Exception: pass
+        except Exception as e: log.warning("sync checkpoint read failed: %s", e)
     active, tcx = client, None
     if getattr(opts, "takeout", False) and hasattr(client, "takeout"):
         try: tcx = client.takeout(); active = await tcx.__aenter__()
@@ -114,16 +115,20 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                                 await _isleep(s or 1)
                         else: break
                         if part.exists():
-                            h = hashlib.sha256(part.read_bytes()).hexdigest(); dst = out / build_filename(mid, h, raw); dup = find_by_sha(conn, cid, h)
-                            if dup and int(dup[0]) != mid:
+                            _h = hashlib.sha256()
+                            with open(part, "rb") as _f:
+                                for _c in iter(lambda: _f.read(1 << 20), b""): _h.update(_c)
+                            h = _h.hexdigest(); dst = out / build_filename(mid, h, raw); dup = find_by_sha(conn, cid, h)
+                            if dup and int(dup[0]) != mid and (out / str(dup[1])).exists():
                                 prev = out / str(dup[1])
                                 try:
-                                    if not dst.exists() and prev.exists(): os.link(str(prev), str(dst))
+                                    if not dst.exists(): os.link(str(prev), str(dst))
                                 except OSError: pass
                                 fn2 = dst.name if dst.exists() else str(dup[1]); sz2 = (dst.stat().st_size if dst.exists() else 0) or (prev.stat().st_size if prev.exists() else 0)
+                                part.unlink(missing_ok=True)
                                 record_download(conn, cid, mid, h, sz2, fn2, meta); append_jsonl(jl, {"id": mid, "file": fn2, "sha": h, "alias_of": int(dup[0]), **meta}); done += 1
                             else:
-                                if dst.exists() and dst.stat().st_size == part.stat().st_size: skip += 1
+                                if dst.exists() and dst.stat().st_size == part.stat().st_size: part.unlink(missing_ok=True); skip += 1
                                 else: os.replace(str(part), str(dst)); os.chmod(str(dst), 0o600)
                                 record_download(conn, cid, mid, h, dst.stat().st_size if dst.exists() else 0, dst.name, meta); append_jsonl(jl, {"id": mid, "file": dst.name, "sha": h, **meta}); total += dst.stat().st_size if dst.exists() else 0; done += 1
                     bar.update(1); await asyncio.sleep(1.0 + random.random() * 0.5)
@@ -136,8 +141,8 @@ async def download_chat(client, target, opts, out, conn) -> dict:
         if tcx is not None:
             try: await tcx.__aexit__(None, None, None)
             except Exception: pass
-    if opts.sync and mx:
+    if opts.sync and mx and not opts.dry_run:
         try:
             if mx > int(get_sync_checkpoint(conn, cid) or 0): set_sync_checkpoint(conn, cid, mx)
-        except Exception: pass
+        except Exception as e: log.warning("sync checkpoint write failed: %s", e)
     return {"done": done, "skipped": skip, "bytes": total}

@@ -86,7 +86,7 @@ def get_sync_checkpoint(conn, chat_id) -> int:
 def set_sync_checkpoint(conn, chat_id, max_msg_id):
     conn.execute(
         "INSERT INTO sync_state(chat_id,max_msg_id) VALUES(?,?)"
-        " ON CONFLICT(chat_id) DO UPDATE SET max_msg_id=excluded.max_msg_id",
+        " ON CONFLICT(chat_id) DO UPDATE SET max_msg_id=max(max_msg_id,excluded.max_msg_id)",
         (chat_id, int(max_msg_id)))
     conn.commit()
 
