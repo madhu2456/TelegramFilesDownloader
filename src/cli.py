@@ -9,11 +9,13 @@ try:
     from .resolver import ResolveError, resolve_target
     from .store import init_db
     from .downloader import DownloadOpts, download_chat
+    from .dialogs import fetch_dialog_rows, format_dialog_table
 except ImportError:
     from config import ensure_out_dir, load_config
     from resolver import ResolveError, resolve_target
     from store import init_db
     from downloader import DownloadOpts, download_chat
+    from dialogs import fetch_dialog_rows, format_dialog_table
 log = logging.getLogger(__name__)
 def _chmod600_tree(out):
     r = Path(out); r.mkdir(parents=True, exist_ok=True)
@@ -30,20 +32,39 @@ def get_client(cfg):
     return TelegramClient(str(cfg.session_path), int(cfg.api_id), str(cfg.api_hash))
 def build_parser():
     p = argparse.ArgumentParser(prog="tg-dl", description="Telegram downloader target chat media")
-    p.add_argument("--target", required=True, help="target chat @user t.me link id phone"); p.add_argument("--out", default="out", help="output dir")
+    p.add_argument("--target", required=False, default=None, help="target chat @user t.me link id phone"); p.add_argument("--out", default="out", help="output dir")
     p.add_argument("--limit", type=int, default=500, help="bounded limit max 500"); p.add_argument("--filter", default=None, help="media type filter")
     p.add_argument("--after", default=None, help="after date"); p.add_argument("--before", default=None, help="before date")
     p.add_argument("--from-user", default=None, help="sender filter"); p.add_argument("--search", default=None, help="search text")
     p.add_argument("--ids", default=None, help="comma ids"); p.add_argument("--max-bytes", type=int, default=None); p.add_argument("--timeout", type=float, default=None)
     p.add_argument("--dry-run", action="store_true", help="no bytes"); p.add_argument("--resume", action="store_true", help="keep .part resume")
     p.add_argument("--join", action="store_true", default=False, help="join default false"); p.add_argument("--takeout", action="store_true", default=False, help="takeout opt-in")
-    p.add_argument("--verbose", action="store_true"); return p
+    p.add_argument("--verbose", action="store_true")
+    p.add_argument("--list-dialogs", action="store_true", default=False, help="list account dialogs")
+    p.add_argument("--dialog-filter", choices=["all", "group", "channel", "dm"], default="all", help="dialog type filter")
+    p.add_argument("--dialog-limit", type=int, default=100, help="max dialogs"); return p
 def main(argv=None) -> int:
     a = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO)
     try: cfg = load_config()
     except SystemExit: return 1
     except Exception: return 1
+    if bool(getattr(a, "list_dialogs", False)):
+        async def _list():
+            c = get_client(cfg)
+            async with c:
+                rows = await fetch_dialog_rows(c, limit=int(getattr(a, "dialog_limit", 100) or 100), kind=str(getattr(a, "dialog_filter", "all") or "all"))
+                print(format_dialog_table(rows))
+                return 0
+        try: return asyncio.run(_list())
+        except FloodWaitError: return 3
+        except (OSError, IOError): return 4
+        except SystemExit as e: return int(e.code) if str(getattr(e, "code", "")).isdigit() else 1
+        except Exception as e:
+            if "auth" in str(type(e).__name__).lower() or "auth" in str(e).lower(): return 2
+            return 1
+    if not getattr(a, "target", None):
+        build_parser().error("--target is required unless --list-dialogs is given")
     if bool(getattr(a, "takeout", False)): cfg.takeout = True
     try: out = ensure_out_dir(a.out); _chmod600_tree(out)
     except (OSError, SystemExit): return 4
