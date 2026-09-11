@@ -384,19 +384,67 @@ async function loadDialogs(kind = 'all') {
   if (activeBtn) activeBtn.classList.add('active');
 
   const list = document.getElementById('dialogList');
-  list.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">Fetching dialogs...</div>';
+  if (!list) return;
+
+  if (!token) {
+    list.innerHTML = `
+      <div style="padding:1.5rem 1rem; text-align:center;">
+        <div style="color:var(--accent-amber); font-size:0.85rem; margin-bottom:0.5rem;">Authentication token required.</div>
+        <div style="color:var(--text-muted); font-size:0.8rem;">Please open the dashboard link printed in your terminal (containing ?token=...).</div>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = `
+    <div style="padding:2rem 1rem; text-align:center; color:var(--text-muted); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.75rem;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-glow)" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
+        <path d="M12 2a10 10 0 0 1 10 10">
+          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+        </path>
+      </svg>
+      <span>Fetching dialogs...</span>
+    </div>
+  `;
+
   try {
-    const res = await fetch(`/api/dialogs?kind=${kind}&token=${token}`, { headers: getHeaders() });
+    const res = await fetch('/api/dialogs?kind=' + encodeURIComponent(kind) + '&token=' + encodeURIComponent(token), { headers: getHeaders() });
+    if (res.status === 401) {
+      list.innerHTML = `
+        <div style="padding:1.5rem 1rem; text-align:center;">
+          <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">Session expired. Please click the fresh link printed in your terminal.</div>
+        </div>
+      `;
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errMsg = err.detail || 'Failed to load dialogs.';
+      list.innerHTML = `
+        <div style="padding:1.5rem 1rem; text-align:center;">
+          <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">${errMsg}</div>
+          <button class="btn btn-cyan" onclick="loadDialogs('${kind}')" style="margin-top:0.5rem; padding:0.35rem 0.8rem; font-size:0.8rem;">↻ Retry</button>
+        </div>
+      `;
+      return;
+    }
     const data = await res.json();
     currentDialogs = data.dialogs || [];
     renderDialogs(currentDialogs);
   } catch (e) {
-    list.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--accent-crimson); font-size:0.85rem;">Failed to load dialogs.</div>';
+    list.innerHTML = `
+      <div style="padding:1.5rem 1rem; text-align:center;">
+        <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">Connection lost or server is offline. Please ensure TeleVault is running.</div>
+        <button class="btn btn-cyan" onclick="loadDialogs('${kind}')" style="padding:0.35rem 0.8rem; font-size:0.8rem;">↻ Retry</button>
+      </div>
+    `;
   }
 }
 
 function renderDialogs(dialogs) {
   const list = document.getElementById('dialogList');
+  if (!list) return;
   if (!dialogs.length) {
     list.innerHTML = `
       <div class="empty-state">
@@ -412,27 +460,50 @@ function renderDialogs(dialogs) {
 
   const badgeClass = { channel: 'badge-channel', group: 'badge-group', dm: 'badge-dm' };
 
-  list.innerHTML = dialogs.map(d => `
-    <div class="dialog-item" onclick="armTarget('${d.username ? '@' + d.username : d.id}')">
+  list.innerHTML = dialogs.map(d => {
+    const kind = String(d.kind || d.type || 'group').toLowerCase();
+    const rawHandle = d.handle ? d.handle : (d.username ? (d.username.startsWith('@') ? d.username : '@' + d.username) : '');
+    const target = rawHandle || String(d.id || '');
+    const displaySub = rawHandle || ('#' + (d.id || ''));
+    const safeTarget = target.replace(/'/g, "\'");
+
+    return `
+    <div class="dialog-item" onclick="armTarget('${safeTarget}')">
       <div style="overflow:hidden; padding-right:0.5rem;">
         <div style="font-weight:600; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.name || 'Unnamed Chat'}</div>
         <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.25rem;">
-          <span class="category-badge ${badgeClass[d.kind] || 'badge-channel'}">${(d.kind || 'CHAT').toUpperCase()}</span>
-          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${d.username ? '@' + d.username : '#' + d.id}</span>
+          <span class="category-badge ${badgeClass[kind] || 'badge-channel'}">${kind.toUpperCase()}</span>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${displaySub}</span>
         </div>
       </div>
-      <button class="btn btn-cyan" style="padding:0.4rem 0.8rem; font-size:0.78rem; min-height:36px; flex-shrink:0;">Arm</button>
+      <button class="btn btn-cyan" onclick="event.stopPropagation(); armTarget('${safeTarget}')" style="padding:0.4rem 0.8rem; font-size:0.78rem; min-height:36px; flex-shrink:0;">Arm</button>
     </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function filterDialogs() {
-  const q = document.getElementById('dialogSearch').value.toLowerCase().trim();
-  const filtered = currentDialogs.filter(d =>
-    (d.name || '').toLowerCase().includes(q) ||
-    (d.username || '').toLowerCase().includes(q) ||
-    String(d.id).includes(q)
-  );
+  const searchInput = document.getElementById('dialogSearch');
+  if (!searchInput) return;
+  const q = searchInput.value.toLowerCase().trim();
+  if (!q) {
+    renderDialogs(currentDialogs);
+    return;
+  }
+  const qClean = q.startsWith('@') ? q.slice(1) : q;
+  const filtered = currentDialogs.filter(d => {
+    const name = String(d.name || '').toLowerCase();
+    const handle = String(d.handle || '').toLowerCase();
+    const username = String(d.username || '').toLowerCase();
+    const id = String(d.id || '');
+    return (
+      name.includes(q) ||
+      handle.includes(q) ||
+      (username && username.includes(qClean)) ||
+      (handle && handle.replace(/^@/, '').includes(qClean)) ||
+      id.includes(q)
+    );
+  });
   renderDialogs(filtered);
 }
 

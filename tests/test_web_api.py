@@ -422,3 +422,138 @@ def test_stream_media_nonexistent_manifest_or_item_returns_404(tmp_path: Path):
     assert resp2.status_code == 404
     assert "Media item not found in manifest" in resp2.json().get("detail", "")
 
+
+def test_dialogs_endpoint_unauthorized():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/api/dialogs")
+    assert resp.status_code == 401
+    assert "UNAUTHORIZED" in resp.text
+
+
+def test_dialogs_endpoint_client_uninitialized(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.tg_client = None
+    client = TestClient(app)
+    token = get_ephemeral_token()
+    resp = client.get("/api/dialogs", headers={"X-Auth-Token": token})
+    assert resp.status_code == 500
+    assert "Telegram client not initialized" in resp.json().get("detail", "")
+
+
+def test_dialogs_endpoint_normalization_dual_keys(tmp_path: Path, monkeypatch):
+    from unittest.mock import MagicMock
+
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    mock_client = MagicMock()
+    mock_client.is_connected.return_value = True
+    app.state.tg_client = mock_client
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    sample_dialogs = [
+        {"name": "Tech Channel", "id": 101, "type": "channel", "handle": "@techchannel"},
+        {"name": "Study Group", "id": 202, "type": "group", "handle": ""},
+        {"name": "Alice", "id": 303, "type": "dm", "handle": "@alice"},
+    ]
+
+    async def mock_fetch_dialog_rows(_client, limit=100, kind="all"):
+        return sample_dialogs
+
+    monkeypatch.setattr("src.web.routes_tg.fetch_dialog_rows", mock_fetch_dialog_rows)
+
+    resp = client.get(f"/api/dialogs?kind=all&token={token}")
+    assert resp.status_code == 200
+    dialogs = resp.json()["dialogs"]
+    assert len(dialogs) == 3
+
+    assert dialogs[0]["type"] == "channel"
+    assert dialogs[0]["kind"] == "channel"
+    assert dialogs[0]["handle"] == "@techchannel"
+    assert dialogs[0]["username"] == "techchannel"
+
+    assert dialogs[1]["type"] == "group"
+    assert dialogs[1]["kind"] == "group"
+    assert dialogs[1]["handle"] == ""
+    assert dialogs[1]["username"] is None
+
+    assert dialogs[2]["type"] == "dm"
+    assert dialogs[2]["kind"] == "dm"
+    assert dialogs[2]["handle"] == "@alice"
+    assert dialogs[2]["username"] == "alice"
+
+
+def test_dialogs_endpoint_server_search_parity(tmp_path: Path, monkeypatch):
+    from unittest.mock import MagicMock
+
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    mock_client = MagicMock()
+    mock_client.is_connected.return_value = True
+    app.state.tg_client = mock_client
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    sample_dialogs = [
+        {"name": "Python Devs", "id": 501, "type": "channel", "handle": "@python_devs"},
+        {"name": "General Chat", "id": 502, "type": "group", "handle": ""},
+        {"name": "Bob", "id": 503, "type": "dm", "handle": "@bobsmith"},
+    ]
+
+    async def mock_fetch_dialog_rows(_client, limit=100, kind="all"):
+        return sample_dialogs
+
+    monkeypatch.setattr("src.web.routes_tg.fetch_dialog_rows", mock_fetch_dialog_rows)
+
+    # search=python -> 1 item (Python Devs)
+    r1 = client.get(f"/api/dialogs?search=python&token={token}")
+    assert r1.status_code == 200
+    res1 = r1.json()["dialogs"]
+    assert len(res1) == 1
+    assert res1[0]["name"] == "Python Devs"
+
+    # search=@bobsmith -> 1 item (Bob)
+    r2 = client.get(f"/api/dialogs?search=@bobsmith&token={token}")
+    assert r2.status_code == 200
+    res2 = r2.json()["dialogs"]
+    assert len(res2) == 1
+    assert res2[0]["name"] == "Bob"
+
+    # search=bobsmith -> 1 item (Bob)
+    r3 = client.get(f"/api/dialogs?search=bobsmith&token={token}")
+    assert r3.status_code == 200
+    res3 = r3.json()["dialogs"]
+    assert len(res3) == 1
+    assert res3[0]["name"] == "Bob"
+
+    # search=502 -> 1 item (General Chat)
+    r4 = client.get(f"/api/dialogs?search=502&token={token}")
+    assert r4.status_code == 200
+    res4 = r4.json()["dialogs"]
+    assert len(res4) == 1
+    assert res4[0]["name"] == "General Chat"
+
+    # search=nonexistent -> 0 items
+    r5 = client.get(f"/api/dialogs?search=nonexistent&token={token}")
+    assert r5.status_code == 200
+    res5 = r5.json()["dialogs"]
+    assert len(res5) == 0
+
+

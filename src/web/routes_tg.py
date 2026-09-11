@@ -128,11 +128,39 @@ async def list_dialogs(request: Request, limit: int = 100, kind: str = "all", se
     if not client.is_connected():
         await client.connect()
     try:
-        rows = await fetch_dialog_rows(client, limit=min(max(1, limit), 500), kind=kind)
+        raw_rows = await fetch_dialog_rows(client, limit=min(max(1, limit), 500), kind=kind)
+        normalized_rows = []
+        for r in raw_rows:
+            t = str(r.get("type", "group")).lower()
+            handle = str(r.get("handle", "") or "")
+            username = handle.lstrip("@") if handle else None
+            normalized_rows.append({
+                "name": r.get("name", "(no name)"),
+                "id": r.get("id"),
+                "type": t,
+                "kind": t,
+                "handle": handle,
+                "username": username,
+            })
         if search and search.strip():
             q = search.strip().lower()
-            rows = [r for r in rows if q in str(r.get("name", "")).lower() or q in str(r.get("username", "")).lower()]
-        return {"dialogs": rows}
+            q_clean = q.lstrip("@")
+
+            def _match(d):
+                name = str(d.get("name", "")).lower()
+                handle = str(d.get("handle", "")).lower()
+                username = str(d.get("username", "") or "").lower()
+                chat_id = str(d.get("id", ""))
+                return (
+                    q in name
+                    or q in handle
+                    or q_clean in username
+                    or q in chat_id
+                    or q_clean in handle.lstrip("@")
+                )
+
+            normalized_rows = [d for d in normalized_rows if _match(d)]
+        return {"dialogs": normalized_rows}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
