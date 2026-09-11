@@ -1,11 +1,13 @@
 """Tests for TeleVault Web Dashboard (Core Engine, Security, JobManager, Media, and Static Assets)."""
 import asyncio
 from pathlib import Path
+import sqlite3
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from src.config import Config
+from src.store import init_db, record_download
 from src.web.app import create_app
 from src.web.job_manager import JobManager, JobConflictError
 from src.web.security import (
@@ -214,3 +216,209 @@ def test_static_assets_integrity():
     assert "history.replaceState" in app_js
     assert "/ws/live" in app_js
     assert "copyToClipboard" in app_js
+
+
+def test_get_media_populated_with_filename_and_relpath(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    conn = init_db(tmp_path / "manifest.db")
+    record_download(
+        conn,
+        12345,
+        1,
+        "a" * 64,
+        1024,
+        "sub/video.mp4",
+        meta={
+            "mime": "video/mp4",
+            "date_utc": "2026-09-11 12:00:00",
+            "snippet": "A test video",
+        },
+    )
+    conn.close()
+
+    sub_dir = tmp_path / "sub"
+    sub_dir.mkdir(parents=True, exist_ok=True)
+    (sub_dir / "video.mp4").write_bytes(b"dummy video data")
+
+    resp = client.get(f"/api/media?token={token}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+
+    item = data["items"][0]
+    assert item["filename"] == "video.mp4"
+    assert item["relpath"] == "sub/video.mp4"
+    assert item["exists"] is True
+    assert item["kind"] == "video"
+    assert item["mime"] == "video/mp4"
+    assert item["stream_url"] == "/api/media/stream/12345/1"
+    assert data["pagination"]["total"] == 1
+
+
+def test_get_media_legacy_schema_migration_and_compatibility(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    db_path = tmp_path / "manifest.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE downloads(chat_id INTEGER NOT NULL, msg_id INTEGER NOT NULL, "
+        "sha256 TEXT NOT NULL, size INTEGER NOT NULL, relpath TEXT NOT NULL, "
+        "created_at TEXT DEFAULT (datetime('now')), UNIQUE(chat_id,msg_id));"
+    )
+    conn.execute(
+        "INSERT INTO downloads(chat_id, msg_id, sha256, size, relpath) VALUES (?, ?, ?, ?, ?)",
+        (999, 1, "b" * 64, 2048, "legacy.jpg"),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = client.get(f"/api/media?token={token}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+
+    item = data["items"][0]
+    assert item["filename"] == "legacy.jpg"
+    assert item["relpath"] == "legacy.jpg"
+    assert item["date_utc"] is None
+    assert item["kind"] == "photo"
+
+
+def test_stream_media_success_and_rfc7233_range(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    conn = init_db(tmp_path / "manifest.db")
+    record_download(
+        conn,
+        111,
+        2,
+        "c" * 64,
+        100,
+        "sample.bin",
+        meta={"mime": "application/octet-stream"},
+    )
+    conn.close()
+
+    (tmp_path / "sample.bin").write_bytes(bytes(range(100)))
+
+    resp = client.get(
+        "/api/media/stream/111/2",
+        headers={"X-Auth-Token": token, "Range": "bytes=10-29"},
+    )
+    assert resp.status_code == 206
+    assert resp.headers.get("Content-Range") == "bytes 10-29/100"
+    assert resp.headers.get("Content-Length") == "20"
+    assert resp.content == bytes(range(10, 30))
+
+
+def test_stream_media_file_deleted_returns_404(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    conn = init_db(tmp_path / "manifest.db")
+    record_download(conn, 111, 3, "d" * 64, 50, "missing.bin")
+    conn.close()
+
+    missing_file = tmp_path / "missing.bin"
+    if missing_file.exists():
+        missing_file.unlink()
+
+    resp = client.get(
+        "/api/media/stream/111/3",
+        headers={"X-Auth-Token": token},
+    )
+    assert resp.status_code == 404
+    assert "Media file not found on disk" in resp.json().get("detail", "")
+
+
+def test_stream_media_traversal_returns_403(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    conn = init_db(tmp_path / "manifest.db")
+    record_download(conn, 111, 4, "e" * 64, 50, "../../etc/shadow")
+    conn.close()
+
+    resp = client.get(
+        "/api/media/stream/111/4",
+        headers={"X-Auth-Token": token},
+    )
+    assert resp.status_code == 403
+    assert "Forbidden: path outside output directory" in resp.json().get("detail", "")
+
+
+def test_stream_media_nonexistent_manifest_or_item_returns_404(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    # Case 1: Missing manifest DB -> 404
+    resp = client.get(
+        "/api/media/stream/999/1",
+        headers={"X-Auth-Token": token},
+    )
+    assert resp.status_code == 404
+    assert "Manifest database not found" in resp.json().get("detail", "")
+
+    # Case 2: Missing chat_id/msg_id in manifest -> 404
+    conn = init_db(tmp_path / "manifest.db")
+    conn.close()
+
+    resp2 = client.get(
+        "/api/media/stream/999/1",
+        headers={"X-Auth-Token": token},
+    )
+    assert resp2.status_code == 404
+    assert "Media item not found in manifest" in resp2.json().get("detail", "")
+

@@ -5,7 +5,17 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from src.store import _ensure_meta
+
 router = APIRouter()
+
+
+def _connect_manifest(db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA busy_timeout=5000;")
+    conn.row_factory = sqlite3.Row
+    return conn
+
 
 def classify_mime(mime: str | None, relpath: str) -> str:
     m = (mime or "").lower()
@@ -17,6 +27,7 @@ def classify_mime(mime: str | None, relpath: str) -> str:
     if m.startswith("audio/") or fn.endswith((".mp3", ".m4a", ".ogg", ".flac", ".wav", ".opus")):
         return "audio"
     return "document"
+
 
 def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int]:
     if not range_header or not range_header.startswith("bytes="):
@@ -41,10 +52,11 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, i
         raise HTTPException(
             status_code=416,
             headers={"Content-Range": f"bytes */{file_size}"},
-            detail="Range Not Satisfiable"
+            detail="Range Not Satisfiable",
         )
     end = min(end, file_size - 1)
     return (start, end)
+
 
 @router.get("/api/media")
 async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str | None = None):
@@ -57,29 +69,40 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
     if not db_path.exists():
         return {"items": [], "pagination": {"page": page, "limit": limit, "total": 0, "pages": 1}}
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _connect_manifest(db_path)
     try:
+        try:
+            _ensure_meta(conn)
+        except sqlite3.OperationalError:
+            pass
+
+        have_cols = {r[1] for r in conn.execute("PRAGMA table_info(downloads)").fetchall()}
+        date_utc_expr = "date_utc" if "date_utc" in have_cols else "NULL AS date_utc"
+        mime_expr = "mime" if "mime" in have_cols else "NULL AS mime"
+        snippet_expr = "snippet" if "snippet" in have_cols else "NULL AS snippet"
+
         cur = conn.cursor()
         total = cur.execute("SELECT count(*) FROM downloads").fetchone()[0]
         rows = cur.execute(
-            "SELECT chat_id, msg_id, sha256, size, filename, date_utc, mime, snippet FROM downloads ORDER BY rowid DESC LIMIT ? OFFSET ?",
-            (limit, offset)
+            f"SELECT chat_id, msg_id, sha256, size, relpath, created_at, {date_utc_expr}, {mime_expr}, {snippet_expr} FROM downloads ORDER BY rowid DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         ).fetchall()
 
         items = []
         for r in rows:
-            fn = r["filename"]
-            k = classify_mime(r["mime"], fn)
+            relpath = r["relpath"]
+            filename = Path(relpath).name
+            k = classify_mime(r["mime"], relpath)
             if kind and kind != "all" and k != kind:
                 continue
-            exists = (out_dir / fn).exists()
+            exists = (out_dir / relpath).exists()
             items.append({
                 "chat_id": r["chat_id"],
                 "msg_id": r["msg_id"],
                 "sha256": r["sha256"],
                 "size": r["size"],
-                "filename": fn,
+                "filename": filename,
+                "relpath": relpath,
                 "date_utc": r["date_utc"],
                 "mime": r["mime"],
                 "snippet": r["snippet"],
@@ -95,10 +118,11 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
                 "limit": limit,
                 "total": total,
                 "pages": pages,
-            }
+            },
         }
     finally:
         conn.close()
+
 
 @router.get("/api/media/stream/{chat_id}/{msg_id}")
 async def stream_media(request: Request, chat_id: int, msg_id: int):
@@ -107,12 +131,13 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Manifest database not found")
 
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    conn = _connect_manifest(db_path)
     try:
+        have_cols = {r[1] for r in conn.execute("PRAGMA table_info(downloads)").fetchall()}
+        mime_expr = "mime" if "mime" in have_cols else "NULL AS mime"
         row = conn.cursor().execute(
-            "SELECT filename, mime FROM downloads WHERE chat_id = ? AND msg_id = ?",
-            (chat_id, msg_id)
+            f"SELECT relpath, {mime_expr} FROM downloads WHERE chat_id = ? AND msg_id = ?",
+            (chat_id, msg_id),
         ).fetchone()
     finally:
         conn.close()
@@ -120,9 +145,11 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="Media item not found in manifest")
 
-    target_file = (out_dir / row["filename"]).resolve()
-    if not target_file.is_relative_to(out_dir) or not target_file.is_file():
-        raise HTTPException(status_code=403, detail="Forbidden: file outside output directory or does not exist")
+    target_file = (out_dir / row["relpath"]).resolve()
+    if not target_file.is_relative_to(out_dir):
+        raise HTTPException(status_code=403, detail="Forbidden: path outside output directory")
+    if not target_file.is_file():
+        raise HTTPException(status_code=404, detail="Media file not found on disk")
 
     file_size = target_file.stat().st_size
     range_header = request.headers.get("range")
@@ -147,6 +174,7 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
         "Content-Type": row["mime"] or "application/octet-stream",
     }
     return StreamingResponse(iterfile(), status_code=206, headers=headers)
+
 
 @router.get("/api/system/storage")
 async def get_storage(request: Request):
