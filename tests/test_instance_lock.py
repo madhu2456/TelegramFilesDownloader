@@ -104,15 +104,19 @@ def test_dynamic_port_allocation():
     import socket
     from src.web.__main__ import find_available_port
 
-    # Bind port 8000 to simulate another user's dashboard
+    # Bind port 8000 to simulate another user's dashboard (or reuse existing in-use state)
     blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        blocker.bind(("127.0.0.1", 8000))
-        blocker.listen(1)
+        try:
+            blocker.bind(("127.0.0.1", 8000))
+            blocker.listen(1)
+        except OSError:
+            pass  # Port 8000 already occupied by active server, verifying auto-increment
 
         port = find_available_port(8000, 50)
         assert port > 8000
         assert port <= 8050
     finally:
         blocker.close()
+

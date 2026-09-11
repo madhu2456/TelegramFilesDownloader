@@ -211,6 +211,19 @@ The launcher:
 - **Interactive Switch**: The download configuration panel includes a "No Limit (All)" toggle switch. When enabled, it disables the numeric limit input and sets the placeholder to `∞ All Messages (unlimited)`.
 - **Indeterminate Shimmer HUD**: For unconstrained downloads (`limit=None`), TeleVault displays `Progress: Uncapped (Streaming)` with an animated electric cyan to neon purple shimmer gradient, while continuing to stream live speeds (MB/s), byte totals, and completed counts in real-time.
 
+### Media Gallery Quick Actions & Streaming Player
+
+- **One-Click Quick Actions**: Every gallery media card displays floating quick-action symbols on hover:
+  - **Open in Browser** (external link icon): Opens the media stream in a new browser tab (`target="_blank"`).
+  - **Download File** (download icon): Directly triggers attachment download using `?download=1`.
+  - **Missing File Indicator**: Shows an alert badge (`⚠️`) if a manifest entry's underlying file is missing from disk.
+- **Theater Lightbox & Audio Player**: Clicking any media card opens a modal theater viewer featuring:
+  - **Seekable Video & Audio Player**: Inline HTML5 video player and dedicated HTML5 audio player (`<audio id="theaterAudio" controls autoplay>`) for music and voice notes.
+  - **Image & Document Inspection**: High-resolution image inspection and document previews.
+  - **Dual Action Controls**: Prominent "Open in Tab" and "Download File" buttons.
+  - **Resource Cleanup**: Halts active media playback and detaches element source (`src`) on modal close to prevent unnecessary background HTTP 206 chunk buffering.
+- **RFC 5987 Streaming Headers & Attachment Mode**: The media streaming endpoint (`/api/media/stream/{chat_id}/{msg_id}`) emits RFC 5987 UTF-8 encoded filename headers (`filename*=UTF-8''...`) with ASCII fallbacks to support international Unicode filenames, and respects `?download=1` to switch disposition from `inline` to `attachment`.
+
 ### REST & WebSocket API Reference
 
 | Endpoint | Method / Protocol | Description |
@@ -227,7 +240,7 @@ The launcher:
 | `/api/download/cancel` | `POST` | Gracefully cancel active download task |
 | `/api/download/state` | `GET` | Fetch current job execution snapshot and recent log history |
 | `/api/media` | `GET` | Paginated query of downloaded files from `manifest.db` with MIME classification |
-| `/api/media/stream/{chat_id}/{msg_id}` | `GET` | RFC 7233 HTTP 206 partial content byte-range streaming for media seeking |
+| `/api/media/stream/{chat_id}/{msg_id}` | `GET` | RFC 7233 HTTP 206 partial content byte-range streaming; supports RFC 5987 Unicode filenames and `?download=1` attachment disposition |
 | `/api/system/storage` | `GET` | Disk space telemetry via `statvfs` (total, free, used %, low-space flag) |
 | `/ws/live` | `WebSocket` | Real-time event stream: progress %, download speed (MB/s), active files, logs |
 

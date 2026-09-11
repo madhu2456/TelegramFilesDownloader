@@ -297,13 +297,13 @@ input:focus, select:focus {
   transform: translateY(-1px);
 }
 
-.btn-secondary {
+.btn-secondary, .btn-slate {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-glass);
   color: var(--text-main);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover, .btn-slate:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.18);
 }
@@ -506,6 +506,7 @@ input:focus, select:focus {
 }
 
 .media-card {
+  position: relative;
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--border-glass);
   border-radius: 10px;
@@ -520,6 +521,56 @@ input:focus, select:focus {
   border-color: rgba(0, 229, 255, 0.35);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(0, 229, 255, 0.08);
+}
+
+.card-action-bar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.media-card:hover .card-action-bar {
+  opacity: 1.0;
+  transform: translateY(-1px);
+}
+
+.card-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.card-action-btn:hover {
+  color: var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.18);
+}
+
+.card-action-btn.disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 .media-thumb {

@@ -622,3 +622,37 @@ def test_ws_live_invalid_origin_clean_1008(tmp_path: Path):
             ws.receive_json()
     assert exc_info.value.code == 1008
 
+
+def test_stream_media_unicode_rfc5987_content_disposition(tmp_path: Path):
+    """Verify non-ASCII filenames stream cleanly with RFC 5987 content-disposition header and support download=1 attachment mode."""
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    unicode_filename = "видео_वीडियो_動画.mp4"
+    conn = init_db(tmp_path / "manifest.db")
+    record_download(conn, 888, 1, "f" * 64, 100, unicode_filename, meta={"mime": "video/mp4"})
+    conn.close()
+
+    (tmp_path / unicode_filename).write_bytes(b"dummy byte content")
+
+    # Inline streaming check
+    resp = client.get(f"/api/media/stream/888/1?token={token}")
+    assert resp.status_code == 206
+    cd = resp.headers.get("Content-Disposition", "")
+    assert "inline;" in cd
+    assert "filename*=UTF-8''" in cd
+
+    # Attachment download check
+    resp_dl = client.get(f"/api/media/stream/888/1?token={token}&download=1")
+    assert resp_dl.status_code == 206
+    assert "attachment;" in resp_dl.headers.get("Content-Disposition", "")
+
+

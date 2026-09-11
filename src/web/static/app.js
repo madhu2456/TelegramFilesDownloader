@@ -613,26 +613,46 @@ async function loadMedia() {
       return;
     }
 
-    grid.innerHTML = mediaCache.map((item, idx) => `
-      <div class="media-card" onclick="openMediaLightboxByIndex(${idx})">
-        <div class="media-thumb">
-          ${item.kind === 'video'
-            ? `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="font-size:0.65rem; color:var(--accent-cyan); font-weight:600;">STREAM</span></div>`
-            : (item.kind === 'photo'
-              ? `<img src="${item.stream_url}?token=${token}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">`
-              : `<span style="font-size:2.5rem;">📄</span>`
-            )
-          }
-        </div>
-        <div class="media-meta">
-          <div class="name" title="${item.filename}">${item.filename}</div>
-          <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.75rem;">
-            <span>${(item.size / (1024 * 1024)).toFixed(2)} MB</span>
-            <span style="font-family:var(--font-mono); color:var(--accent-cyan);">${item.kind.toUpperCase()}</span>
+    grid.innerHTML = mediaCache.map((item, idx) => {
+      const isMissing = item.exists === false;
+      const actionBar = isMissing
+        ? `<div class="card-action-bar" onclick="event.stopPropagation();"><span class="card-action-btn disabled" title="File missing from disk" aria-disabled="true" onclick="event.stopPropagation();" style="opacity:0.4; cursor:not-allowed;">⚠️</span></div>`
+        : `<div class="card-action-bar" onclick="event.stopPropagation();">
+            <a href="${item.stream_url}?token=${token}" target="_blank" rel="noopener noreferrer" class="card-action-btn" title="Open in browser" aria-label="Open ${item.filename} in new tab" onclick="event.stopPropagation();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            <a href="${item.stream_url}?token=${token}&download=1" download="${item.filename}" class="card-action-btn" title="Download file" aria-label="Download ${item.filename}" onclick="event.stopPropagation();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </a>
+          </div>`;
+
+      let thumbContent = '';
+      if (item.kind === 'video') {
+        thumbContent = `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="font-size:0.65rem; color:var(--accent-cyan); font-weight:600;">VIDEO</span></div>`;
+      } else if (item.kind === 'photo') {
+        thumbContent = `<img src="${item.stream_url}?token=${token}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">`;
+      } else if (item.kind === 'audio') {
+        thumbContent = `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg><span style="font-size:0.65rem; color:#A855F7; font-weight:600;">AUDIO</span></div>`;
+      } else {
+        thumbContent = `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span style="font-size:0.65rem; color:var(--text-muted); font-weight:600;">DOC</span></div>`;
+      }
+
+      return `
+        <div class="media-card" onclick="openMediaLightboxByIndex(${idx})">
+          ${actionBar}
+          <div class="media-thumb">
+            ${thumbContent}
+          </div>
+          <div class="media-meta">
+            <div class="name" title="${item.filename}">${item.filename}</div>
+            <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.75rem;">
+              <span>${(item.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <span style="font-family:var(--font-mono); color:var(--accent-cyan);">${item.kind.toUpperCase()}</span>
+            </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch (e) {
     grid.innerHTML = '<div style="color:var(--accent-crimson); padding:1rem; grid-column:1/-1;">Failed to load media manifest.</div>';
   }
@@ -649,7 +669,11 @@ function openMediaLightboxByIndex(idx) {
   document.getElementById('lightboxMime').innerText = item.mime || 'application/octet-stream';
   document.getElementById('lightboxMsgId').innerText = `#${item.msg_id || '--'}`;
   document.getElementById('lightboxSha').innerText = item.sha256 || 'N/A';
-  document.getElementById('lightboxDownloadLink').href = `${item.stream_url}?token=${token}`;
+  
+  const dlLink = document.getElementById('lightboxDownloadLink');
+  if (dlLink) dlLink.href = `${item.stream_url}?token=${token}&download=1`;
+  const openLink = document.getElementById('lightboxOpenLink');
+  if (openLink) openLink.href = `${item.stream_url}?token=${token}`;
 
   const container = document.getElementById('lightboxMediaContainer');
   if (item.kind === 'video') {
@@ -661,12 +685,24 @@ function openMediaLightboxByIndex(idx) {
     `;
   } else if (item.kind === 'photo') {
     container.innerHTML = `<img src="${item.stream_url}?token=${token}" style="max-width:100%; max-height:520px; object-fit:contain;">`;
+  } else if (item.kind === 'audio') {
+    container.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1rem; width:100%;">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="1.5" style="margin-bottom:1rem;"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <audio id="theaterAudio" controls autoplay style="width:100%; max-width:480px; margin-top:1rem;">
+          <source src="${item.stream_url}?token=${token}">
+          Your browser does not support HTML5 audio.
+        </audio>
+      </div>
+    `;
   } else {
     container.innerHTML = `
       <div style="text-align:center; padding:3rem 1rem;">
-        <div style="font-size:3.5rem; margin-bottom:1rem;">📄</div>
+        <div style="margin-bottom:1rem;">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
         <div style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${item.filename}</div>
-        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem;">Binary document ready for download.</div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem;">Binary document ready for direct open or download.</div>
       </div>
     `;
   }
@@ -674,16 +710,19 @@ function openMediaLightboxByIndex(idx) {
   document.getElementById('mediaLightboxModal').style.display = 'flex';
 }
 
-// Explicit Video Pause & Source Detachment Teardown (Critic ELEV-01)
+// Explicit Video/Audio Pause & Source Detachment Teardown
 function closeMediaLightbox() {
   const modal = document.getElementById('mediaLightboxModal');
-  const video = modal.querySelector('video');
-  if (video) {
-    video.pause();
-    video.currentTime = 0;
-    video.removeAttribute('src'); // Stop background HTTP 206 chunk buffering
-    video.load();
-  }
+  const mediaEls = modal.querySelectorAll('video, audio');
+  mediaEls.forEach(el => {
+    try {
+      el.pause();
+      el.currentTime = 0;
+      el.querySelectorAll('source').forEach(s => s.removeAttribute('src'));
+      el.removeAttribute('src'); // Stop background HTTP 206 chunk buffering
+      el.load();
+    } catch (e) {}
+  });
   const container = document.getElementById('lightboxMediaContainer');
   if (container) container.innerHTML = '';
 

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import sqlite3
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -167,11 +168,17 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
                 remaining -= len(chunk)
                 yield chunk
 
+    disposition_type = "attachment" if request.query_params.get("download") == "1" else "inline"
+    filename = Path(row["relpath"]).name
+    ascii_filename = filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip() or "file"
+    encoded_filename = quote(filename, safe="")
+
     headers = {
         "Content-Range": f"bytes {start}-{end}/{file_size}",
         "Accept-Ranges": "bytes",
         "Content-Length": str(chunk_size),
         "Content-Type": row["mime"] or "application/octet-stream",
+        "Content-Disposition": f'{disposition_type}; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
     }
     return StreamingResponse(iterfile(), status_code=206, headers=headers)
 
