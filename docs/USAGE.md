@@ -163,3 +163,55 @@ venv/bin/python -m src.cli --target @someuser123 --takeout --out out --limit 50
 - Exit 3 (Rate limit / `FloodWaitError` / `PeerFloodError`): Wait exceeds 300s safety cap or Telegram returns `PeerFloodError` (excessive actions or query rate on a peer). Pending database operations in `manifest.db` are safely committed before exiting. Back off and wait before retrying; do not retry hot.
 - Exit 4 (Disk / Permissions): `ENOSPC` from `statvfs` precheck means insufficient disk space — free disk or lower `--limit` / `--max-bytes`. Unhandled filesystem I/O errors, or world-writable `--out` directory refused (`0o700` required).
 - Exit 5 (Resolve): Target cannot be resolved or accessed. `CHANNEL_PRIVATE` / not-a-participant means join the channel first, then retry. `INVITE_NO_JOIN` means an invite link was supplied without `--join` (re-run with `--join`). Expired/invalid invite links or unknown handles (including unallocated 4-char Fragment handles) also exit 5.
+
+## 7. Web Dashboard (TeleVault)
+
+TeleVault features a modern, zero-build web interface powered by FastAPI and vanilla HTML5/CSS3/ES6 Dark Obsidian Glassmorphism (no Node.js or npm build step required).
+
+### Launching the Dashboard
+
+Start the web dashboard server:
+
+```bash
+python run_web.py
+# Or via module execution:
+python -m src.web
+```
+
+The launcher:
+1. Generates a cryptographically secure 32-byte ephemeral startup token (`secrets.token_urlsafe(32)`).
+2. Spawns your default web browser to `http://127.0.0.1:8000/?token=<token>`.
+3. Starts the Uvicorn ASGI server binding locally to `127.0.0.1:8000`.
+
+### Security Architecture
+
+- **Ephemeral Startup Token**: Every server invocation generates an active token. All `/api/*` endpoints require the token passed via `x-auth-token` header, `Authorization: Bearer <token>`, or `?token=` query parameter.
+- **CSRF & Strict Origin Validation**: State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`) validate the `Origin` header against `127.0.0.1`, `localhost`, and `[::1]` matching the active server port.
+- **PII Masking**: Sensitive identity values such as telephone numbers are masked (e.g. `+1***4567`) across status and auth payloads.
+
+### Decoupled JobManager & Mutex
+
+- **Decoupled Lifecycle**: Download execution runs inside a detached `asyncio.Task` managed by `JobManager`. Downloads survive browser tab closures, page refreshes, and transient connection drops.
+- **Singleton Execution Mutex**: An asynchronous lock permits only one active download job at a time. Attempting to start a concurrent job returns HTTP 409 Conflict (`JobConflictError`), preventing database lock contention or disk corruption.
+- **State & Terminal History**: The `JobManager` maintains a circular buffer of the last 1000 log entries and an execution snapshot, instantly streaming state upon client reconnection.
+
+### REST & WebSocket API Reference
+
+| Endpoint | Method / Protocol | Description |
+| :--- | :--- | :--- |
+| `/api/status` | `GET` | Health check: session file presence, masked phone, output directory |
+| `/api/auth/me` | `GET` | Current Telegram authorization status and authenticated user info |
+| `/api/auth/qr` | `GET` | Fetch QR login token, scan URL, and expiry timestamp |
+| `/api/auth/phone/send_code` | `POST` | Request SMS verification code for an E.164 phone number |
+| `/api/auth/phone/sign_in` | `POST` | Submit SMS verification code and phone hash |
+| `/api/auth/2fa` | `POST` | Submit 2FA cloud password if account requires two-step verification |
+| `/api/dialogs` | `GET` | Retrieve account dialogs with `limit`, `kind` (`channel`, `group`, `dm`), and `search` filters |
+| `/api/resolve` | `POST` | Resolve target entity metadata and check membership before downloading |
+| `/api/download/start` | `POST` | Launch background download task with configured options |
+| `/api/download/cancel` | `POST` | Gracefully cancel active download task |
+| `/api/download/state` | `GET` | Fetch current job execution snapshot and recent log history |
+| `/api/media` | `GET` | Paginated query of downloaded files from `manifest.db` with MIME classification |
+| `/api/media/stream/{chat_id}/{msg_id}` | `GET` | RFC 7233 HTTP 206 partial content byte-range streaming for media seeking |
+| `/api/system/storage` | `GET` | Disk space telemetry via `statvfs` (total, free, used %, low-space flag) |
+| `/ws/live` | `WebSocket` | Real-time event stream: progress %, download speed (MB/s), active files, logs |
+

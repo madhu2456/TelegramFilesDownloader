@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>TeleVault | Modern Web Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Tele<span>Vault</span>
+    </div>
+    <div class="header-status">
+      <div class="pill"><span id="wsDot" class="live-dot disconnected"></span><span id="wsText">Connecting</span></div>
+      <div class="pill" id="storagePill">Disk: -- / --</div>
+      <div class="pill" id="userPill">Unauthorized</div>
+    </div>
+  </header>
+
+  <main class="dashboard-grid">
+    <!-- Left Column: Auth & Chat Explorer -->
+    <section>
+      <!-- Module 1: Auth Wizard -->
+      <div class="glass-card" id="authCard">
+        <h2>Telegram Account Access</h2>
+        <div class="tab-row">
+          <button class="tab-btn active" onclick="switchAuthTab('phone')">Phone SMS</button>
+          <button class="tab-btn" onclick="switchAuthTab('qr')">QR Login</button>
+        </div>
+        <div id="phoneAuthTab">
+          <div class="input-group">
+            <label>Phone Number (E.164 format)</label>
+            <input type="text" id="phoneInput" placeholder="+15551234567">
+          </div>
+          <button class="btn btn-cyan" onclick="sendPhoneCode()" style="width:100%">Send Code</button>
+          <div id="codeSection" style="display:none; margin-top:1rem;">
+            <div class="input-group">
+              <label>Telegram Verification Code</label>
+              <input type="text" id="codeInput" placeholder="12345">
+            </div>
+            <button class="btn btn-cyan" onclick="signInWithCode()" style="width:100%">Sign In</button>
+          </div>
+        </div>
+        <div id="qrAuthTab" style="display:none; text-align:center;">
+          <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Scan with Telegram on your phone (Settings > Devices > Link Desktop Device)</p>
+          <div id="qrContainer" style="padding:1rem; background:#fff; border-radius:8px; display:inline-block;"></div>
+        </div>
+      </div>
+
+      <!-- Module 2: Chat Explorer -->
+      <div class="glass-card">
+        <h2>Chat Explorer</h2>
+        <div class="input-group">
+          <input type="search" id="dialogSearch" placeholder="Filter dialogs..." oninput="filterDialogs()">
+        </div>
+        <div class="tab-row">
+          <button class="tab-btn active" onclick="loadDialogs('all')">All</button>
+          <button class="tab-btn" onclick="loadDialogs('channel')">Channels</button>
+          <button class="tab-btn" onclick="loadDialogs('group')">Groups</button>
+          <button class="tab-btn" onclick="loadDialogs('dm')">DMs</button>
+        </div>
+        <div class="dialog-list" id="dialogList">Loading dialogs...</div>
+      </div>
+    </section>
+
+    <!-- Right Column: Download Controls, Real-Time Gauges & Gallery -->
+    <section>
+      <!-- Module 3: Download Configuration -->
+      <div class="glass-card">
+        <h2>Download Configuration</h2>
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1rem;">
+          <div class="input-group">
+            <label>Target (@channel, t.me/link, ID, phone)</label>
+            <input type="text" id="targetInput" placeholder="@my_channel or t.me/c/12345">
+          </div>
+          <div class="input-group">
+            <label>Limit (1-500)</label>
+            <input type="number" id="limitInput" value="100" min="1" max="500">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+          <div class="input-group">
+            <label>Media Filter</label>
+            <select id="filterSelect">
+              <option value="">All Media</option>
+              <option value="video">Video</option>
+              <option value="photo">Photo</option>
+              <option value="audio">Audio</option>
+              <option value="document">Document</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Search Text</label>
+            <input type="text" id="searchInput" placeholder="Search keywords...">
+          </div>
+        </div>
+        <div style="display:flex; gap:1rem; margin-top:0.5rem;">
+          <button class="btn btn-cyan" onclick="startDownload()">Start Download</button>
+          <button class="btn btn-crimson" onclick="cancelDownload()">Cancel Active Job</button>
+        </div>
+      </div>
+
+      <!-- Module 4: Real-time Execution & Speed Gauge -->
+      <div class="glass-card">
+        <h2>Live Download Status</h2>
+        <div style="display:grid; grid-template-columns: 160px 1fr; gap:1.5rem; align-items:center;">
+          <div class="gauge-container" style="position:relative;">
+            <svg class="gauge-svg" viewBox="0 0 140 140">
+              <circle class="gauge-bg" cx="70" cy="70" r="60"></circle>
+              <circle id="speedGauge" class="gauge-progress" cx="70" cy="70" r="60"></circle>
+            </svg>
+            <div class="gauge-value">
+              <div class="gauge-num" id="speedText">0.0</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">MB/s</div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.85rem;">
+              <span id="jobStatusText">Status: Idle</span>
+              <span id="jobProgressText">0%</span>
+            </div>
+            <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:9999px; overflow:hidden;">
+              <div id="jobProgressBar" style="width:0%; height:100%; background:var(--accent-cyan); transition:width 0.3s;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:0.75rem; font-size:0.75rem; color:var(--text-muted);">
+              <span id="jobDownloadedText">Done: 0</span>
+              <span id="jobSkippedText">Skipped: 0</span>
+              <span id="jobBytesText">0 MB</span>
+            </div>
+          </div>
+        </div>
+        <div class="terminal-window" id="terminalLogs" style="margin-top:1rem;">Waiting for events...</div>
+      </div>
+
+      <!-- Module 5: Media Gallery -->
+      <div class="glass-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <h2 style="margin:0;">Downloaded Media Gallery</h2>
+          <button class="tab-btn" onclick="loadMedia()">Refresh</button>
+        </div>
+        <div class="gallery-grid" id="mediaGrid">No media downloaded yet.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

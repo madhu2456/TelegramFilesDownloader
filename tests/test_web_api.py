@@ -1,0 +1,216 @@
+"""Tests for TeleVault Web Dashboard (Core Engine, Security, JobManager, Media, and Static Assets)."""
+import asyncio
+from pathlib import Path
+import pytest
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+from src.config import Config
+from src.web.app import create_app
+from src.web.job_manager import JobManager, JobConflictError
+from src.web.security import (
+    generate_ephemeral_token,
+    verify_token,
+    verify_origin,
+    mask_phone,
+    get_ephemeral_token,
+)
+from src.web.routes_media import classify_mime, parse_range_header
+
+
+def test_security_token_generation_and_verification():
+    token = generate_ephemeral_token()
+    assert len(token) >= 32
+    assert get_ephemeral_token() == token
+    assert verify_token(token) is True
+    assert verify_token("invalid_token_12345") is False
+    assert verify_token("") is False
+
+
+def test_security_origin_verification():
+    assert verify_origin("http://127.0.0.1:8000", 8000) is True
+    assert verify_origin("http://localhost:8000", 8000) is True
+    assert verify_origin("http://[::1]:8000", 8000) is True
+    assert verify_origin("http://127.0.0.1:9000", 8000) is False
+    assert verify_origin("http://attacker.com", 8000) is False
+    assert verify_origin("http://evil-localhost:8000", 8000) is False
+    assert verify_origin(None, 8000) is True
+
+
+def test_security_mask_phone():
+    assert mask_phone("+15551234567") == "+1***4567"
+    assert mask_phone("+919876543210") == "+9***3210"
+    assert mask_phone("1234") == "1***4"
+    assert mask_phone("") == ""
+
+
+def test_app_status_auth_and_origin(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    # 1. Unauthenticated request -> 401
+    resp = client.get("/api/status")
+    assert resp.status_code == 401
+    assert "UNAUTHORIZED" in resp.text
+
+    # 2. Authenticated request with X-Auth-Token header -> 200
+    resp = client.get("/api/status", headers={"X-Auth-Token": token})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["phone_masked"] == "+1***4567"
+    assert "abcdef0123456789" not in str(data)
+
+    # 3. Authenticated request via query param -> 200
+    resp = client.get(f"/api/status?token={token}")
+    assert resp.status_code == 200
+
+    # 4. State-changing POST with foreign origin -> 403
+    resp = client.post(
+        "/api/download/cancel",
+        headers={"X-Auth-Token": token, "Origin": "http://evil.com"},
+    )
+    assert resp.status_code == 403
+
+
+def test_job_manager_singleton_mutex_and_circular_buffer():
+    jm = JobManager()
+    assert jm.is_running() is False
+    assert len(jm.get_recent_logs()) == 0
+
+    # Fill circular buffer past maxlen (1000)
+    for i in range(1200):
+        jm.add_log(f"log message {i}")
+    recent = jm.get_recent_logs()
+    assert len(recent) == 1000
+    assert "log message 200" in recent[0]
+    assert "log message 1199" in recent[-1]
+
+    # Simulate running job
+    jm._is_running = True
+    jm._active_job_id = "job-42"
+    assert jm.is_running() is True
+    snap = jm.get_snapshot()
+    assert snap["status"] == "running"
+    assert snap["job_id"] == "job-42"
+
+    async def run_conflict_test():
+        with pytest.raises(JobConflictError) as exc_info:
+            await jm.start_job(None, None, None, None, None)
+        assert "already running" in str(exc_info.value)
+
+    asyncio.run(run_conflict_test())
+
+
+def test_download_start_409_conflict(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    app.state.job_manager._is_running = True
+    app.state.job_manager._active_job_id = "active-job"
+
+    resp = client.post(
+        "/api/download/start",
+        json={"target": "@testchannel"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "CONFLICT"
+
+
+def test_classify_mime_logic():
+    assert classify_mime("video/mp4", "video.mp4") == "video"
+    assert classify_mime("video/webm", "test.webm") == "video"
+    assert classify_mime(None, "movie.mkv") == "video"
+
+    assert classify_mime("image/jpeg", "pic.jpg") == "photo"
+    assert classify_mime("image/png", "pic.png") == "photo"
+    assert classify_mime(None, "photo.webp") == "photo"
+
+    assert classify_mime("audio/mpeg", "song.mp3") == "audio"
+    assert classify_mime("audio/ogg", "track.ogg") == "audio"
+    assert classify_mime(None, "sound.flac") == "audio"
+
+    assert classify_mime("application/pdf", "doc.pdf") == "document"
+    assert classify_mime("text/plain", "notes.txt") == "document"
+    assert classify_mime(None, "archive.tar.gz") == "document"
+
+
+def test_parse_range_header_rfc7233():
+    total = 2048
+    start, end = parse_range_header("bytes=0-1023", total)
+    assert start == 0 and end == 1023
+
+    start, end = parse_range_header("bytes=1000-", total)
+    assert start == 1000 and end == 2047
+
+    start, end = parse_range_header("bytes=-500", total)
+    assert start == 1548 and end == 2047
+
+    start, end = parse_range_header(None, total)
+    assert start == 0 and end == 2047
+
+    with pytest.raises(HTTPException) as exc:
+        parse_range_header("bytes=3000-", total)
+    assert exc.value.status_code == 416
+    assert exc.value.headers.get("Content-Range") == f"bytes */{total}"
+
+    with pytest.raises(HTTPException) as exc:
+        parse_range_header("bytes=500-200", total)
+    assert exc.value.status_code == 416
+
+
+def test_media_stream_traversal_protection(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    resp = client.get(
+        "/api/media/stream/123/456",
+        headers={"X-Auth-Token": token},
+    )
+    assert resp.status_code == 404
+
+
+def test_static_assets_integrity():
+    static_dir = Path("src/web/static")
+    index_html = (static_dir / "index.html").read_text(encoding="utf-8")
+    styles_css = (static_dir / "styles.css").read_text(encoding="utf-8")
+    app_js = (static_dir / "app.js").read_text(encoding="utf-8")
+
+    assert "<meta name=\"referrer\" content=\"no-referrer\">" in index_html
+    assert "TeleVault" in index_html
+    assert "speedGauge" in index_html
+    assert "terminalLogs" in index_html
+    assert "mediaGrid" in index_html
+
+    assert "#0B0E14" in styles_css
+    assert "backdrop-filter" in styles_css
+    assert "#00E5FF" in styles_css
+
+    assert "history.replaceState" in app_js
+    assert "/ws/live" in app_js
+    assert "copyToClipboard" in app_js

@@ -2,12 +2,23 @@
 
 [![build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/example/TelegramFilesDownloader/actions) [![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/) [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-> Hardened Telethon-based Telegram media downloader with safe defaults, resume, and audit manifest.
+> Hardened Telethon-based Telegram media downloader with safe defaults, resume, audit manifest, and the **TeleVault Modern Web Dashboard**.
 
-See `docs/USAGE.md` for full flags, safety limits, and troubleshooting.
+See `docs/USAGE.md` for full flags, safety limits, web API reference, and troubleshooting.
 
 ## Features
 
+### TeleVault Modern Web Dashboard
+- **Zero-Build Architecture**: FastAPI backend + Vanilla HTML5/CSS3/ES6 Dark Obsidian Glassmorphism UI — zero Node.js/npm dependencies required.
+- **Interactive Telegram Auth Wizard**: QR login and phone SMS login flows with seamless 2FA cloud password support.
+- **Real-Time WebSocket Telemetry HUD**: Live animated SVG speed gauge (MB/s), visual progress bar, and monospace streaming terminal (`/ws/live`).
+- **Interactive Chat Explorer**: Browse and search account dialogs (channels, groups, DMs) with 1-click target arming.
+- **Advanced Download Configuration Panel**: Tune bounds, media type filters, date ranges, takeout, sync, and dry-run options from an intuitive UI.
+- **Paginated Media Gallery & Streamer**: RFC 7233 HTTP 206 byte-range seeking for smooth video playback, audio listening, and photo previews.
+- **System Storage Health Monitor**: Real-time disk capacity telemetry via `statvfs` with low-space alerts.
+- **Decoupled JobManager Resilience**: Background execution decoupled from browser sessions; downloads survive page refreshes and network blips with singleton execution mutex protection.
+
+### Hardened Core Downloader
 - Download from public channels, private channels/groups (member-only), and DMs.
 - 7 target forms: `@user`, `t.me/user` (supports 4–32 char handles including Fragment handles like `@news`, `t.me/auto`), phone `+...`, numeric id, `t.me/c/...`, `t.me/+...`, `t.me/joinchat/...`.
 - Dialog discovery: `--list-dialogs` with `--dialog-filter` and `--dialog-limit` to inspect account dialogs safely.
@@ -40,6 +51,20 @@ TG_SESSION=session/telegram.session
 ```
 
 Get `api_id` / `api_hash` at <https://my.telegram.org> under API development tools.
+
+### Launch TeleVault Web Dashboard
+
+Start the web dashboard (generates an ephemeral security token and opens your browser automatically):
+
+```bash
+python run_web.py
+# Or via module entrypoint:
+python -m src.web
+```
+
+Navigate to `http://127.0.0.1:8000/?token=<ephemeral_token>` if not opened automatically.
+
+### Or Run via CLI
 
 First run (public channel preview):
 
