@@ -5,6 +5,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -20,18 +21,33 @@ def get_lock_file(session_path: Path | str) -> Path:
 
 
 def is_pid_matching_app(pid: int) -> bool:
-    """Check if a PID belongs to this project (not a recycled unrelated process)."""
-    try:
-        # Verify process UID matches current user
-        stat = os.stat(f"/proc/{pid}")
-        if stat.st_uid != os.getuid():
+    """Check if a PID belongs to this project with Linux /proc and portable fallback."""
+    markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web", "python")
+    proc_path = Path(f"/proc/{pid}")
+    if proc_path.exists():
+        try:
+            stat = os.stat(f"/proc/{pid}")
+            if stat.st_uid != os.getuid():
+                return False
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", errors="replace").lower()
+            return any(m in cmdline for m in markers)
+        except (OSError, PermissionError, FileNotFoundError):
             return False
-        # Verify cmdline contains project identifiers
-        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", errors="replace").lower()
-        markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web")
-        return any(m in cmdline for m in markers)
-    except (OSError, PermissionError, FileNotFoundError):
-        return False
+
+    # Portable fallback for macOS, BSD, or containers where /proc is unmounted
+    import subprocess
+    try:
+        res = subprocess.run(["ps", "-p", str(pid), "-o", "uid=", "-o", "args="], capture_output=True, text=True, timeout=2.0)
+        if res.returncode == 0 and res.stdout.strip():
+            parts = res.stdout.strip().split(None, 1)
+            if len(parts) >= 1 and parts[0].isdigit():
+                if int(parts[0]) != os.getuid():
+                    return False
+            cmd = res.stdout.lower()
+            return any(m in cmd for m in markers)
+    except Exception:
+        pass
+    return _is_pid_alive(pid)
 
 
 def is_zombie(pid: int) -> bool:
@@ -137,39 +153,55 @@ def acquire_instance_lock(session_path: Path | str) -> Path:
     # Register cleanup handlers
     atexit.register(cleanup_instance_lock)
 
-    # Install signal handlers that chain to previous handlers
-    prev_sigterm = signal.getsignal(signal.SIGTERM)
-    prev_sigint = signal.getsignal(signal.SIGINT)
+    # Install signal handlers only when in the main thread
+    if threading.current_thread() is threading.main_thread():
+        try:
+            prev_sigterm = signal.getsignal(signal.SIGTERM)
+            prev_sigint = signal.getsignal(signal.SIGINT)
 
-    def _handle_term(signum, frame):
-        cleanup_instance_lock()
-        if callable(prev_sigterm) and prev_sigterm not in (signal.SIG_DFL, signal.SIG_IGN):
-            prev_sigterm(signum, frame)
-        sys.exit(128 + signum)
+            def _handle_term(signum, frame):
+                cleanup_instance_lock()
+                if callable(prev_sigterm) and prev_sigterm not in (signal.SIG_DFL, signal.SIG_IGN):
+                    prev_sigterm(signum, frame)
+                sys.exit(128 + signum)
 
-    def _handle_int(signum, frame):
-        cleanup_instance_lock()
-        if callable(prev_sigint) and prev_sigint not in (signal.SIG_DFL, signal.SIG_IGN):
-            prev_sigint(signum, frame)
-        sys.exit(128 + signum)
+            def _handle_int(signum, frame):
+                cleanup_instance_lock()
+                if callable(prev_sigint) and prev_sigint not in (signal.SIG_DFL, signal.SIG_IGN):
+                    prev_sigint(signum, frame)
+                sys.exit(128 + signum)
 
-    signal.signal(signal.SIGTERM, _handle_term)
-    signal.signal(signal.SIGINT, _handle_int)
+            signal.signal(signal.SIGTERM, _handle_term)
+            signal.signal(signal.SIGINT, _handle_int)
+        except (ValueError, AttributeError):
+            pass
 
     log.info("Instance lock acquired: %s (PID %d)", lock_path, os.getpid())
     return lock_path
 
 
 def cleanup_instance_lock() -> None:
-    """Remove lockfile only if it still contains our PID (ownership guard)."""
+    """Remove lockfile under flock protection only if it still contains our PID and matches inode."""
     global _active_lock_path
-    if _active_lock_path is None:
+    lock_path = _active_lock_path
+    _active_lock_path = None  # Re-entrancy guard
+    if lock_path is None:
         return
     try:
-        content = _active_lock_path.read_text().strip()
-        if content == str(os.getpid()):
-            _active_lock_path.unlink(missing_ok=True)
-            log.info("Instance lock released: %s", _active_lock_path)
+        if lock_path.exists():
+            fd = os.open(str(lock_path), os.O_RDWR)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                # Verify inode match to prevent unlinking newly created file
+                st_fd = os.fstat(fd)
+                st_path = lock_path.stat()
+                if (st_fd.st_dev, st_fd.st_ino) == (st_path.st_dev, st_path.st_ino):
+                    content = os.pread(fd, 64, 0).decode("utf-8", errors="replace").strip()
+                    if content == str(os.getpid()):
+                        lock_path.unlink(missing_ok=True)
+                        log.info("Instance lock released: %s", lock_path)
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                os.close(fd)
     except (OSError, FileNotFoundError):
         pass
-    _active_lock_path = None

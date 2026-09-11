@@ -46,7 +46,7 @@ class JobManager:
 
     def get_snapshot(self) -> dict:
         snap = dict(self._snapshot)
-        if self._is_running:
+        if self._is_running and snap.get("status") not in ("completed", "cancelled", "failed"):
             snap["status"] = "running"
             snap["job_id"] = self._active_job_id
         return snap
@@ -156,7 +156,13 @@ class JobManager:
             self._snapshot["bytes_total"] = res.get("bytes", 0)
             elapsed = round(time.monotonic() - t0, 1)
             self.add_log(f"Job {job_id} {status} in {elapsed}s: done={res.get('done', 0)}, skipped={res.get('skipped', 0)}, bytes={res.get('bytes', 0)}")
-            self._broadcast({"type": "COMPLETED", "state": self.get_snapshot(), "result": res})
+            self._broadcast({"type": "COMPLETED" if status == "completed" else "CANCELLED", "state": self.get_snapshot(), "result": res})
+        except asyncio.CancelledError:
+            self._snapshot["status"] = "cancelled"
+            self._snapshot["finished_at"] = datetime.now(timezone.utc).isoformat()
+            self.add_log(f"Job {job_id} cancelled.")
+            self._broadcast({"type": "CANCELLED", "state": self.get_snapshot()})
+            raise
         except Exception as exc:
             self._snapshot["status"] = "failed"
             self._snapshot["finished_at"] = datetime.now(timezone.utc).isoformat()
