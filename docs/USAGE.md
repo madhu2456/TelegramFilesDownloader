@@ -198,6 +198,7 @@ The launcher:
 - **Ephemeral Startup Token**: Every server invocation generates an active token. All `/api/*` endpoints require the token passed via `x-auth-token` header, `Authorization: Bearer <token>`, or `?token=` query parameter.
 - **CSRF & Strict Origin Validation**: State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`) validate the `Origin` header against `127.0.0.1`, `localhost`, and `[::1]` matching the active server port.
 - **PII Masking**: Sensitive identity values such as telephone numbers are masked (e.g. `+1***4567`) across status and auth payloads.
+- **WebSocket Session Lifecycle & Token Guard**: Real-time telemetry (`/ws/live`) authenticates via ephemeral token on handshake. If the token is missing, invalid, or expired, the socket terminates immediately with code `1008` (Policy Violation). The Web UI halts auto-reconnect loops, displays "Session Expired", and directs the user to the active URL printed in the server terminal.
 
 ### Decoupled JobManager & Mutex
 

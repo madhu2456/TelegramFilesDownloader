@@ -124,6 +124,8 @@ function connectWebSocket() {
   ws.onclose = (event) => {
     if (dot) dot.className = 'live-dot disconnected';
     if (event && (event.code === 1008 || event.code === 4403 || event.code === 1003)) {
+      sessionStorage.removeItem('tele_vault_token');
+      token = '';
       if (text) text.innerText = 'Session Expired';
       showToast(
         'Session token invalid or expired. Please close this tab or open the fresh link printed in your terminal.',
@@ -148,6 +150,23 @@ function connectWebSocket() {
 }
 
 function handleWsEvent(data) {
+  if (data.type === 'SESSION_EXPIRED' || data.type === 'ORIGIN_FORBIDDEN') {
+    sessionStorage.removeItem('tele_vault_token');
+    token = '';
+    const dot = document.getElementById('wsDot');
+    const text = document.getElementById('wsText');
+    if (dot) dot.className = 'live-dot disconnected';
+    if (text) text.innerText = 'Session Expired';
+    const msg = data.type === 'ORIGIN_FORBIDDEN'
+      ? 'WebSocket connection rejected: Origin not allowed.'
+      : 'Session token invalid or expired. Please click the fresh link printed in your terminal.';
+    showToast(msg, 'error', 'Session Expired', 10000);
+    if (ws) {
+      ws.onclose = null;
+      try { ws.close(1000); } catch (e) {}
+    }
+    return;
+  }
   if (data.type === 'INIT_STATE' || data.type === 'PROGRESS' || data.type === 'COMPLETED' || data.type === 'FAILED') {
     if (data.state) updateJobUI(data.state);
   }

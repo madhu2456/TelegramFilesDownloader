@@ -99,13 +99,29 @@ async def get_download_state(request: Request):
 async def websocket_live(websocket: WebSocket):
     token = websocket.query_params.get("token") or websocket.headers.get("x-auth-token")
     if not verify_token(token):
-        await websocket.close(code=1008)
+        try:
+            await websocket.accept()
+            await websocket.send_json({
+                "type": "SESSION_EXPIRED",
+                "detail": "Session token invalid or expired"
+            })
+            await websocket.close(code=1008, reason="Policy Violation: Invalid token")
+        except Exception:
+            pass
         return
 
     origin = websocket.headers.get("origin")
     port = websocket.url.port or 8000
     if not verify_origin(origin, port):
-        await websocket.close(code=1008)
+        try:
+            await websocket.accept()
+            await websocket.send_json({
+                "type": "ORIGIN_FORBIDDEN",
+                "detail": "Origin not allowed"
+            })
+            await websocket.close(code=1008, reason="Policy Violation: Invalid origin")
+        except Exception:
+            pass
         return
 
     await websocket.accept()

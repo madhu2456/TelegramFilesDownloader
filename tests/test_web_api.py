@@ -1,4 +1,5 @@
 """Tests for TeleVault Web Dashboard (Core Engine, Security, JobManager, Media, and Static Assets)."""
+from starlette.websockets import WebSocketDisconnect
 import asyncio
 from pathlib import Path
 import sqlite3
@@ -556,4 +557,63 @@ def test_dialogs_endpoint_server_search_parity(tmp_path: Path, monkeypatch):
     res5 = r5.json()["dialogs"]
     assert len(res5) == 0
 
+def test_ws_live_authenticated_success(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    with client.websocket_connect(f"/ws/live?token={token}") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "INIT_STATE"
+        assert "state" in msg
+        assert "logs" in msg
+        assert isinstance(msg["logs"], list)
+
+
+def test_ws_live_invalid_token_clean_1008(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    client = TestClient(app)
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws/live?token=invalid_token_xyz") as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "SESSION_EXPIRED"
+            assert "Session token invalid" in msg["detail"]
+            ws.receive_json()
+    assert exc_info.value.code == 1008
+
+
+def test_ws_live_invalid_origin_clean_1008(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/ws/live?token={token}",
+            headers={"origin": "http://evil-domain.com:8000"},
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "ORIGIN_FORBIDDEN"
+            assert "Origin not allowed" in msg["detail"]
+            ws.receive_json()
+    assert exc_info.value.code == 1008
 
