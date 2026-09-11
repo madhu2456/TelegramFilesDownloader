@@ -29,7 +29,7 @@ def _run(c, tgt, opts, out, conn):
     with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
         return asyncio.run(download_chat(c, tgt, opts, out, conn))
 def test_bva_limits_0_1_100_101(tmp_path):
-    for lim, exp in [(0, 500), (1, 1), (100, 100), (101, 101)]:
+    for lim, exp in [(0, None), (1, 1), (100, 100), (101, 101), (2500, 2500), (None, None)]:
         c = _cli([])
         r = _run(c, _tgt(), DownloadOpts(limit=lim), tmp_path, init_db(":memory:"))
         assert c.iter_messages.call_args[1]["limit"] == exp

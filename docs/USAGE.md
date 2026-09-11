@@ -38,6 +38,14 @@ Public channel by username:
 venv/bin/python -m src.cli --target https://t.me/someuser123 --out out --limit 100
 ```
 
+Full chat history archive (no message limit):
+
+```bash
+venv/bin/python -m src.cli --target @someuser123 --no-limit --out out
+# Or using --limit 0 for unlimited:
+venv/bin/python -m src.cli --target @someuser123 --limit 0 --out out
+```
+
 4-character Fragment handle:
 
 ```bash
@@ -122,6 +130,7 @@ venv/bin/python -m src.cli --target @someuser123 --takeout --out out --limit 50
 ## 4. Limits and safety notes
 
 - 2GB per-file cap on most accounts; 4GB with Premium. Oversize files fail precheck; use `--max-bytes`.
+- Uncapped downloads: The previous 500-message ceiling has been removed. Use `--no-limit` or `--limit 0` to download entire chat histories without limit. Bounded runs remain supported by specifying any positive integer (e.g. `--limit 100` or `--limit 2500`).
 - FloodWait and rate limiting: serial 1s + jitter, cap 300s; `FloodWaitError` exceeding 300s or `PeerFloodError` commits manifest and exits 3. Back off, do not retry hot.
 - Target formats & handles: Supports 7 target forms: `@user`, `t.me/<user>` (supporting 4–32 character handles including 4-character Fragment usernames like `@news` or `t.me/auto`), phone numbers (`+...`), numeric IDs, `t.me/c/<id>/...`, `t.me/+...`, and `t.me/joinchat/...`.
 - Atomic sync checkpoint: `--sync` tracks the maximum message ID in SQLite `sync_checkpoints`. Checkpoint updates are strictly monotonic and advance only upon verified file downloads or recorded skips (never on failed downloads).
@@ -136,7 +145,8 @@ venv/bin/python -m src.cli --target @someuser123 --takeout --out out --limit 50
 | :--- | :--- | :--- |
 | `--target` | none | Target chat: `@user`, phone, numeric ID, `t.me/<user>` (4–32 chars, incl. 4-char Fragment handles), `t.me/c/<id>/...`, or `t.me/+...` invite. Required unless `--list-dialogs` is specified. |
 | `--out` | `out` | Output directory (refused if world-writable, exit 4) |
-| `--limit` | `500` | Message bound, clamped to max 500 |
+| `--limit` | `500` | Message limit (0 for unlimited) |
+| `--no-limit` | `false` | Download all messages without limit (full chat history archive) |
 | `--filter` | none | Media-type filter / attribute match (e.g. `photo`, `video`, `audio`, `document`) |
 | `--after` / `--before` | none | Date-window filters ISO-8601 (UTC normalized) |
 | `--from-user` | none | Sender ID or username substring filter |
@@ -194,6 +204,11 @@ The launcher:
 - **Decoupled Lifecycle**: Download execution runs inside a detached `asyncio.Task` managed by `JobManager`. Downloads survive browser tab closures, page refreshes, and transient connection drops.
 - **Singleton Execution Mutex**: An asynchronous lock permits only one active download job at a time. Attempting to start a concurrent job returns HTTP 409 Conflict (`JobConflictError`), preventing database lock contention or disk corruption.
 - **State & Terminal History**: The `JobManager` maintains a circular buffer of the last 1000 log entries and an execution snapshot, instantly streaming state upon client reconnection.
+
+### No Limit (All Messages) & Streaming Shimmer HUD
+
+- **Interactive Switch**: The download configuration panel includes a "No Limit (All)" toggle switch. When enabled, it disables the numeric limit input and sets the placeholder to `∞ All Messages (unlimited)`.
+- **Indeterminate Shimmer HUD**: For unconstrained downloads (`limit=None`), TeleVault displays `Progress: Uncapped (Streaming)` with an animated electric cyan to neon purple shimmer gradient, while continuing to stream live speeds (MB/s), byte totals, and completed counts in real-time.
 
 ### REST & WebSocket API Reference
 

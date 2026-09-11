@@ -33,7 +33,7 @@ def get_client(cfg):
 def build_parser():
     p = argparse.ArgumentParser(prog="tg-dl", description="Telegram downloader target chat media")
     p.add_argument("--target", required=False, default=None, help="target chat @user t.me link id phone"); p.add_argument("--out", default="out", help="output dir")
-    p.add_argument("--limit", type=int, default=500, help="bounded limit max 500"); p.add_argument("--filter", default=None, help="media type filter")
+    p.add_argument("--limit", type=int, default=500, help="message limit (0 for unlimited)"); p.add_argument("--no-limit", action="store_true", default=False, help="download all messages without limit"); p.add_argument("--filter", default=None, help="media type filter")
     p.add_argument("--after", default=None, help="after date ISO-8601 (UTC normalized)"); p.add_argument("--before", default=None, help="before date ISO-8601 (UTC normalized)")
     p.add_argument("--from-user", default=None, help="sender filter"); p.add_argument("--search", default=None, help="search text")
     p.add_argument("--ids", default=None, help="comma ids"); p.add_argument("--max-bytes", type=int, default=None); p.add_argument("--timeout", type=float, default=None)
@@ -70,7 +70,9 @@ def main(argv=None) -> int:
     try: out = ensure_out_dir(a.out); _chmod600_tree(out)
     except (OSError, SystemExit): return 4
     ids = [int(x) for x in str(a.ids).split(",") if x.strip().isdigit()] if a.ids else None
-    opts = DownloadOpts(limit=min(int(a.limit or 500), 500), max_bytes=a.max_bytes, timeout_s=a.timeout, filter=a.filter, after=a.after, before=a.before, from_user=getattr(a, "from_user", None), search=a.search, ids=ids, dry_run=bool(a.dry_run), resume=bool(a.resume), takeout=bool(getattr(a, "takeout", False) or getattr(cfg, "takeout", False)), min_id=getattr(a, "min_id", None), sync=bool(getattr(a, "sync", False)))
+    raw_lim = 0 if getattr(a, "no_limit", False) else getattr(a, "limit", 500)
+    eff_lim = None if (raw_lim is None or int(raw_lim) <= 0) else int(raw_lim)
+    opts = DownloadOpts(limit=eff_lim, max_bytes=a.max_bytes, timeout_s=a.timeout, filter=a.filter, after=a.after, before=a.before, from_user=getattr(a, "from_user", None), search=a.search, ids=ids, dry_run=bool(a.dry_run), resume=bool(a.resume), takeout=bool(getattr(a, "takeout", False) or getattr(cfg, "takeout", False)), min_id=getattr(a, "min_id", None), sync=bool(getattr(a, "sync", False)))
     async def _run():
         c = get_client(cfg)
         async with c:

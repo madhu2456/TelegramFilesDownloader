@@ -29,6 +29,7 @@ class JobManager:
             "target": None,
             "progress": 0.0,
             "total_msgs": 0,
+            "is_unlimited": False,
             "downloaded_msgs": 0,
             "skipped_msgs": 0,
             "speed_mbps": 0.0,
@@ -85,12 +86,15 @@ class JobManager:
             self._is_running = True
             self._active_job_id = f"job-{uuid.uuid4().hex[:8]}"
             self._cancel_event.clear()
+            raw_lim = getattr(opts, "limit", 500)
+            total_msgs = int(raw_lim) if (raw_lim is not None and int(raw_lim) > 0) else None
             self._snapshot = {
                 "status": "running",
                 "job_id": self._active_job_id,
                 "target": str(getattr(target, "value", target)),
                 "progress": 0.0,
-                "total_msgs": int(getattr(opts, "limit", 500) or 500),
+                "total_msgs": total_msgs,
+                "is_unlimited": total_msgs is None,
                 "downloaded_msgs": 0,
                 "skipped_msgs": 0,
                 "speed_mbps": 0.0,
@@ -101,7 +105,8 @@ class JobManager:
                 "finished_at": None,
                 "bytes_total": 0,
             }
-            self.add_log(f"Job {self._active_job_id} initiated for target {self._snapshot['target']}")
+            lim_desc = f"limit: {total_msgs}" if total_msgs is not None else "limit: unlimited"
+            self.add_log(f"Job {self._active_job_id} initiated for target {self._snapshot['target']} ({lim_desc})")
             self._active_task = asyncio.create_task(
                 self._run_job(self._active_job_id, client, target, opts, out, conn)
             )

@@ -22,7 +22,7 @@ try: signal.signal(signal.SIGINT, _mark)
 except Exception: pass
 @dataclass
 class DownloadOpts:
-    limit: int = 500
+    limit: int | None = 500
     max_bytes: int | None = None
     timeout_s: float | None = None
     filter: str | None = None
@@ -79,7 +79,9 @@ def _ok(m, o):
         if not match: return False
     return True
 async def download_chat(client, target, opts, out, conn) -> dict:
-    lim = min(int(opts.limit or 500), 500); out = Path(out); out.mkdir(parents=True, exist_ok=True)
+    raw_lim = getattr(opts, "limit", 500)
+    lim = None if (raw_lim is None or int(raw_lim) <= 0) else int(raw_lim)
+    out = Path(out); out.mkdir(parents=True, exist_ok=True)
     ent = getattr(target, "entity", target); cid = int(getattr(ent, "id", 0) or 0)
     _dt(opts.after, "after"); _dt(opts.before, "before")
     log.info("start %s", scrub_for_log({"chat": str(getattr(ent, "id", ent)), "limit": lim})); precheck_disk(out, 1 << 20)

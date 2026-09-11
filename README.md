@@ -11,15 +11,16 @@ See `docs/USAGE.md` for full flags, safety limits, web API reference, and troubl
 ### TeleVault Modern Web Dashboard
 - **Zero-Build Architecture**: FastAPI backend + Vanilla HTML5/CSS3/ES6 Dark Obsidian Glassmorphism UI — zero Node.js/npm dependencies required.
 - **Interactive Telegram Auth Wizard**: QR login and phone SMS login flows with seamless 2FA cloud password support.
-- **Real-Time WebSocket Telemetry HUD**: Live animated SVG speed gauge (MB/s), visual progress bar, and monospace streaming terminal (`/ws/live`).
+- **Real-Time WebSocket Telemetry HUD**: Live animated SVG speed gauge (MB/s), visual progress bar with indeterminate streaming shimmer for uncapped downloads, and monospace streaming terminal (`/ws/live`).
 - **Interactive Chat Explorer**: Browse and search account dialogs (channels, groups, DMs) with 1-click target arming.
-- **Advanced Download Configuration Panel**: Tune bounds, media type filters, date ranges, takeout, sync, and dry-run options from an intuitive UI.
+- **Advanced Download Configuration Panel**: Controls for media filters, date ranges, takeout, sync, dry-run, and a dedicated **"No Limit (All)" switch** for full chat history archiving.
 - **Paginated Media Gallery & Streamer**: RFC 7233 HTTP 206 byte-range seeking for smooth video playback, audio listening, and photo previews.
 - **System Storage Health Monitor**: Real-time disk capacity telemetry via `statvfs` with low-space alerts.
 - **Decoupled JobManager Resilience**: Background execution decoupled from browser sessions; downloads survive page refreshes and network blips with singleton execution mutex protection.
 
 ### Hardened Core Downloader
 - Download from public channels, private channels/groups (member-only), and DMs.
+- **Uncapped & Bounded Downloads**: Removal of the 500-message ceiling; support for `--no-limit` (or `--limit 0`) to archive complete chat histories.
 - 7 target forms: `@user`, `t.me/user` (supports 4–32 char handles including Fragment handles like `@news`, `t.me/auto`), phone `+...`, numeric id, `t.me/c/...`, `t.me/+...`, `t.me/joinchat/...`.
 - Dialog discovery: `--list-dialogs` with `--dialog-filter` and `--dialog-limit` to inspect account dialogs safely.
 - Filters: `--filter`, `--search`, `--from-user`, `--after` / `--before`, `--ids`, `--min-id`.
@@ -78,6 +79,7 @@ venv/bin/python -m src.cli --target @someuser123 --out out --limit 20
 | :--- | :--- |
 | Public channel | `venv/bin/python -m src.cli --target https://t.me/someuser123 --out out --limit 100` |
 | 4-char Fragment handle | `venv/bin/python -m src.cli --target @news --out out --limit 50` |
+| Full chat archive (No Limit) | `venv/bin/python -m src.cli --target @someuser123 --no-limit --out out` |
 | List account dialogs | `venv/bin/python -m src.cli --list-dialogs --dialog-filter channel --dialog-limit 50` |
 | Incremental sync | `venv/bin/python -m src.cli --target @someuser123 --sync --out out` |
 | Private invite with opt-in join | `venv/bin/python -m src.cli --target https://t.me/+AAAAbbbb --join --out out --limit 50` |
@@ -107,6 +109,7 @@ tests/
 
 ## Version history
 
+- **Uncapped Downloads & No Limit Mode**: Removed 500-message ceiling across CLI and Web UI. Added `--no-limit` (and `--limit 0`) CLI flags for full chat history archiving, interactive "No Limit (All)" toggle switch in Web UI, and indeterminate streaming progress shimmer animation.
 - `v0.3.1` (hardening): Support 4-character Fragment handles (`@news`, `t.me/auto`); exit code 3 on `PeerFloodError` and `FloodWaitError` > 300s; monotonic sync checkpointing (only advances on verified downloads/skips); automatic `.part` cleanup on aliases and same-size skips; directory fsync on replace.
 - `v0.3.0`: Incremental sync with `--sync` and `--min-id`; SHA-256 content deduplication with alias records; UTC ISO-8601 timestamps (`Z` suffix); takeout wrapper support; rich metadata in `messages.jsonl`.
 - `v0.2.0`: Safe account dialog discovery (`--list-dialogs`, `--dialog-filter`, `--dialog-limit`) without leaking phone numbers or secrets.

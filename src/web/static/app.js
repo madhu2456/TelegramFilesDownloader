@@ -1,3 +1,18 @@
+function toggleNoLimit(checked) {
+  const input = document.getElementById('limitInput');
+  if (!input) return;
+  if (checked) {
+    input.dataset.prevValue = input.value;
+    input.value = '';
+    input.disabled = true;
+    input.placeholder = '∞ All Messages (unlimited)';
+  } else {
+    input.disabled = false;
+    input.value = input.dataset.prevValue || '100';
+    input.placeholder = 'e.g. 100 or toggle No Limit';
+  }
+}
+
 // TeleVault Modern Web Dashboard Frontend Engine
 let token = '';
 let ws = null;
@@ -151,14 +166,29 @@ function handleWsEvent(data) {
 
 function updateJobUI(s) {
   document.getElementById('jobStatusText').innerText = `Status: ${s.status.toUpperCase()}`;
-  document.getElementById('jobProgressText').innerText = `${s.progress}%`;
 
+  const isUnlimited = s.total_msgs === null || s.is_unlimited;
   const bar = document.getElementById('jobProgressBar');
-  bar.style.width = `${s.progress}%`;
-  if (s.status === 'running') {
-    bar.classList.add('progress-active-bar');
+
+  if (isUnlimited) {
+    document.getElementById('jobProgressText').innerText = s.status === 'running' ? 'Uncapped (Streaming)' : `${s.progress}%`;
+    if (s.status === 'running') {
+      bar.style.width = '100%';
+      bar.classList.add('progress-indeterminate');
+      bar.classList.remove('progress-active-bar');
+    } else {
+      bar.classList.remove('progress-indeterminate');
+      bar.style.width = `${s.progress}%`;
+    }
   } else {
-    bar.classList.remove('progress-active-bar');
+    document.getElementById('jobProgressText').innerText = `${s.progress}%`;
+    bar.style.width = `${s.progress}%`;
+    bar.classList.remove('progress-indeterminate');
+    if (s.status === 'running') {
+      bar.classList.add('progress-active-bar');
+    } else {
+      bar.classList.remove('progress-active-bar');
+    }
   }
 
   document.getElementById('speedText').innerText = (s.speed_mbps || 0).toFixed(1);
@@ -414,7 +444,9 @@ function armTarget(t) {
 // 7. Download Management
 async function startDownload() {
   const target = document.getElementById('targetInput').value.trim();
-  const limit = parseInt(document.getElementById('limitInput').value, 10) || 100;
+  const noLimit = document.getElementById('noLimitToggle')?.checked || false;
+  const rawLimit = parseInt(document.getElementById('limitInput').value, 10);
+  const limit = noLimit ? null : (isNaN(rawLimit) ? 100 : rawLimit);
   const filter = document.getElementById('filterSelect').value || null;
   const search = document.getElementById('searchInput').value.trim() || null;
 
@@ -435,7 +467,7 @@ async function startDownload() {
     const res = await fetch(`/api/download/start?token=${token}`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ target, limit, filter, search, sync, resume, dry_run, takeout, join }),
+      body: JSON.stringify({ target, limit, no_limit: noLimit, filter, search, sync, resume, dry_run, takeout, join }),
     });
 
     if (res.status === 409) {

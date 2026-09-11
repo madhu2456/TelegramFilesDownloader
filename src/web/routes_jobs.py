@@ -16,7 +16,8 @@ router = APIRouter()
 
 class DownloadStartRequest(BaseModel):
     target: str
-    limit: int = 500
+    limit: int | None = 500
+    no_limit: bool = False
     filter: str | None = None
     after: str | None = None
     before: str | None = None
@@ -56,8 +57,10 @@ async def start_download(req: DownloadStartRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Target resolution failed: {e}")
 
+    raw_lim = None if req.no_limit else req.limit
+    eff_lim = None if (raw_lim is None or int(raw_lim) <= 0) else int(raw_lim)
     opts = DownloadOpts(
-        limit=req.limit,
+        limit=eff_lim,
         filter=req.filter,
         after=req.after,
         before=req.before,
