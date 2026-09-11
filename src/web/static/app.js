@@ -16,6 +16,16 @@ window._lastActiveElement = null;
   } else {
     token = sessionStorage.getItem('tele_vault_token') || '';
   }
+  if (!token) {
+    setTimeout(() => {
+      showToast(
+        'Authentication token required. Please use the link printed in your terminal: http://127.0.0.1:8000/?token=...',
+        'warning',
+        'Token Required',
+        8000
+      );
+    }, 100);
+  }
 })();
 
 function getHeaders() {
@@ -76,22 +86,39 @@ function showToast(message, type = 'info', title = null, duration = 3800) {
 
 // 3. Reconnecting WebSocket Telemetry
 function connectWebSocket() {
+  const dot = document.getElementById('wsDot');
+  const text = document.getElementById('wsText');
+
+  if (!token) {
+    if (dot) dot.className = 'live-dot disconnected';
+    if (text) text.innerText = 'No Token';
+    return;
+  }
+
   const loc = window.location;
   const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${proto}//${loc.host}/ws/live?token=${encodeURIComponent(token)}`;
 
   ws = new WebSocket(wsUrl);
-  const dot = document.getElementById('wsDot');
-  const text = document.getElementById('wsText');
 
   ws.onopen = () => {
-    dot.className = 'live-dot';
-    text.innerText = 'Live';
+    if (dot) dot.className = 'live-dot';
+    if (text) text.innerText = 'Live';
   };
 
-  ws.onclose = () => {
-    dot.className = 'live-dot disconnected';
-    text.innerText = 'Reconnecting...';
+  ws.onclose = (event) => {
+    if (dot) dot.className = 'live-dot disconnected';
+    if (event && (event.code === 1008 || event.code === 4403 || event.code === 1003)) {
+      if (text) text.innerText = 'Session Expired';
+      showToast(
+        'Session token invalid or expired. Please close this tab or open the fresh link printed in your terminal.',
+        'error',
+        'Session Expired',
+        10000
+      );
+      return;
+    }
+    if (text) text.innerText = 'Reconnecting...';
     setTimeout(connectWebSocket, 3000);
   };
 
