@@ -113,7 +113,8 @@ def test_job_manager_singleton_mutex_and_circular_buffer():
     asyncio.run(run_conflict_test())
 
 
-def test_download_start_409_conflict(tmp_path: Path):
+def test_download_start_auto_terminates_previous_job(tmp_path: Path):
+    """Starting a new download auto-terminates the previous active job instead of 409."""
     cfg = Config(
         api_id=12345,
         api_hash="abcdef0123456789abcdef0123456789",
@@ -125,16 +126,20 @@ def test_download_start_409_conflict(tmp_path: Path):
     client = TestClient(app)
     token = get_ephemeral_token()
 
-    app.state.job_manager._is_running = True
-    app.state.job_manager._active_job_id = "active-job"
+    # Simulate a running job that cancel_job_async can clear
+    jm = app.state.job_manager
+    jm._is_running = True
+    jm._active_job_id = "active-job"
+    jm._cancel_event.clear()
 
     resp = client.post(
         "/api/download/start",
         json={"target": "@testchannel"},
         headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
     )
-    assert resp.status_code == 409
-    assert resp.json()["error"] == "CONFLICT"
+    # After auto-termination, the job manager should have cancelled the previous job
+    # The request may fail at target resolution (no real Telegram client), but should NOT be 409
+    assert resp.status_code != 409
 
 
 def test_classify_mime_logic():

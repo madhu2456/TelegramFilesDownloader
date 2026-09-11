@@ -50,6 +50,11 @@ def main(argv=None) -> int:
     try: cfg = load_config()
     except SystemExit: return 1
     except Exception: return 1
+    try:
+        from src.instance_lock import acquire_instance_lock
+        acquire_instance_lock(cfg.session_path)
+    except Exception:
+        pass
     if bool(getattr(a, "list_dialogs", False)):
         async def _list():
             c = get_client(cfg)

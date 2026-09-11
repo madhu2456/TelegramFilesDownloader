@@ -2,6 +2,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import socket
 import sys
 import threading
 import time
@@ -19,9 +20,34 @@ import uvicorn  # noqa: E402
 from src.web.app import create_app  # noqa: E402
 from src.web.security import generate_ephemeral_token  # noqa: E402
 
+
+def find_available_port(start_port: int = 8000, max_attempts: int = 50, host: str = "127.0.0.1") -> int:
+    """Probe for the first available port starting from start_port."""
+    for offset in range(max_attempts):
+        port = start_port + offset
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host, port))
+                return port
+            except OSError:
+                continue
+    return start_port  # fallback
+
+
 def main():
+    # Acquire single-instance lock per Telegram session
+    try:
+        from src.config import load_config
+        from src.instance_lock import acquire_instance_lock
+        cfg = load_config()
+        acquire_instance_lock(cfg.session_path)
+    except Exception as e:
+        print(f"[TeleVault] Instance lock note: {e}")
+
+    port = find_available_port(8000, 50)
     token = generate_ephemeral_token()
-    url = f"http://127.0.0.1:8000/?token={token}"
+    url = f"http://127.0.0.1:{port}/?token={token}"
     print("=" * 60)
     print(" TeleVault Modern Web Dashboard ")
     print(f" Web UI: {url}")
@@ -34,7 +60,7 @@ def main():
 
     threading.Thread(target=_open_browser, daemon=True).start()
     app = create_app()
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 if __name__ == "__main__":
     main()

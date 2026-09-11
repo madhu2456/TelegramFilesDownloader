@@ -36,10 +36,8 @@ class DownloadStartRequest(BaseModel):
 async def start_download(req: DownloadStartRequest, request: Request):
     jm: JobManager = request.app.state.job_manager
     if jm.is_running():
-        return JSONResponse(
-            status_code=409,
-            content={"error": "CONFLICT", "detail": "A download job is already running", "job_id": jm._active_job_id}
-        )
+        jm.add_log(f"Auto-terminating active job {jm._active_job_id} for new request.")
+        await jm.cancel_job_async(timeout=5.0)
 
     client = getattr(request.app.state, "tg_client", None)
     if not client:

@@ -103,7 +103,8 @@ async def download_chat(client, target, opts, out, conn) -> dict:
             msgs = active.iter_messages(ent, limit=lim, reverse=bool(opts.reverse), search=opts.search, ids=opts.ids, from_user=opts.from_user, min_id=eff_min_id); bar = tqdm(total=lim, desc="dl", unit="msg")
             try:
                 async for m in msgs:
-                    if _stop or (opts.timeout_s and time.monotonic() - t0 > float(opts.timeout_s)) or (opts.max_bytes is not None and total >= int(opts.max_bytes)): break
+                    ce = getattr(opts, "cancel_event", None)
+                    if _stop or (ce and ce.is_set()) or (opts.timeout_s and time.monotonic() - t0 > float(opts.timeout_s)) or (opts.max_bytes is not None and total >= int(opts.max_bytes)): break
                     if not _ok(m, opts): bar.update(1); continue
                     mid = int(getattr(m, "id", 0) or 0)
                     if is_downloaded(conn, cid, mid): skip += 1; mx = max(mx, mid); bar.update(1); continue

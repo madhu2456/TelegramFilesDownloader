@@ -120,6 +120,26 @@ class JobManager:
             return True
         return False
 
+    async def cancel_job_async(self, timeout: float = 5.0) -> bool:
+        """Cancel the active job and wait for it to finish (up to timeout seconds)."""
+        if not self._is_running:
+            return False
+        self._cancel_event.set()
+        task = self._active_task
+        self.add_log("Cancellation requested (auto-terminate for new job).")
+        self._broadcast({"type": "CANCEL_REQUESTED", "job_id": self._active_job_id})
+        if task and not task.done():
+            task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+            except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                pass
+        # Wait for _is_running to clear (set in _run_job finally block)
+        deadline = asyncio.get_event_loop().time() + timeout
+        while self._is_running and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.1)
+        return True
+
     async def _run_job(self, job_id: str, client, target, opts, out, conn) -> None:
         t0 = time.monotonic()
         try:
