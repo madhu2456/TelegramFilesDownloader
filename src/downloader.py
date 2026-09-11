@@ -90,6 +90,7 @@ async def download_chat(client, target, opts, out, conn) -> dict:
     if opts.sync:
         try: eff = max(int(eff or 0), int(get_sync_checkpoint(conn, cid) or 0)) or None
         except Exception as e: log.warning("sync checkpoint read failed: %s", e)
+    eff_min_id = 0 if (eff is None and bool(opts.reverse)) else eff
     active, tcx = client, None
     if getattr(opts, "takeout", False) and hasattr(client, "takeout"):
         try: tcx = client.takeout(); active = await tcx.__aenter__()
@@ -99,7 +100,7 @@ async def download_chat(client, target, opts, out, conn) -> dict:
     t0, total, done, skip, mx = time.monotonic(), 0, 0, 0, 0; jl = out / "messages.jsonl"
     try:
         async with asyncio.Semaphore(1):
-            msgs = active.iter_messages(ent, limit=lim, reverse=bool(opts.reverse), search=opts.search, ids=opts.ids, from_user=opts.from_user, min_id=eff); bar = tqdm(total=lim, desc="dl", unit="msg")
+            msgs = active.iter_messages(ent, limit=lim, reverse=bool(opts.reverse), search=opts.search, ids=opts.ids, from_user=opts.from_user, min_id=eff_min_id); bar = tqdm(total=lim, desc="dl", unit="msg")
             try:
                 async for m in msgs:
                     if _stop or (opts.timeout_s and time.monotonic() - t0 > float(opts.timeout_s)) or (opts.max_bytes is not None and total >= int(opts.max_bytes)): break

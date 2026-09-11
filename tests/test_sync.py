@@ -93,10 +93,15 @@ def test_sync_checkpoint_updates_to_max_and_min_id_passthrough(tmp_path):
     _run(c2, _tgt(9), DownloadOpts(limit=10, min_id=7), tmp_path, conn)
     assert c2.iter_messages.call_args[1]["min_id"] == 7
     assert get_sync_checkpoint(conn, 9) == 12
-    # no sync and no min_id -> None passed
+    # no sync and no min_id -> 0 passed when reverse=True (avoids Telethon max(0, None) TypeError)
     c3 = _cli([], None)
     _run(c3, _tgt(9), DownloadOpts(limit=10), tmp_path, conn)
-    assert c3.iter_messages.call_args[1]["min_id"] is None
+    assert c3.iter_messages.call_args[1]["min_id"] == 0
+    assert get_sync_checkpoint(conn, 9) == 12
+    # reverse=False passes None
+    c4 = _cli([], None)
+    _run(c4, _tgt(9), DownloadOpts(limit=10, reverse=False), tmp_path, conn)
+    assert c4.iter_messages.call_args[1]["min_id"] is None
     assert get_sync_checkpoint(conn, 9) == 12
 
 

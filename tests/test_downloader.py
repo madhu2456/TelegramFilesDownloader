@@ -240,3 +240,13 @@ def test_peer_flood_error_exit_code_3(tmp_path):
 
         exit_code = main(["--target", "@testchan", "--out", str(tmp_path)])
         assert exit_code == 3
+
+
+def test_reverse_with_none_min_id_passes_zero(tmp_path):
+    c = _cli([])
+    _run(c, _tgt(), DownloadOpts(limit=10, reverse=True, min_id=None), tmp_path, init_db(":memory:"))
+    assert c.iter_messages.call_args[1]["min_id"] == 0
+
+    c2 = _cli([])
+    _run(c2, _tgt(), DownloadOpts(limit=10, reverse=False, min_id=None), tmp_path, init_db(":memory:"))
+    assert c2.iter_messages.call_args[1]["min_id"] is None
