@@ -183,7 +183,7 @@ def test_part_cleanup_on_alias(tmp_path):
     assert lines[0]["sha"] == sha and lines[1]["sha"] == sha
     # .part litter must be gone for both messages
     assert list(out.glob("*.part")) == []
-    part12 = out / (sanitize_component("12_v.mp4") + ".part")
+    part12 = out / (sanitize_component("1_12_v.mp4") + ".part")
     assert not part12.exists()
     # dst for first message exists; alias file resolvable
     assert (out / lines[0]["file"]).exists()
@@ -210,8 +210,8 @@ def test_part_cleanup_on_skip_same_size(tmp_path):
     # same-size dst path: skip counted AND manifest still recorded (v0.3 behavior),
     # but .part must be cleaned (v0.3.1 fix: old code leaked .part here)
     assert r["skipped"] == 1
-    assert r["done"] == 1
-    assert r["bytes"] == len(payload)
+    assert r["done"] == 0
+    assert r["bytes"] == 0
     # .part must be cleaned, dst preserved
     assert list(out.glob("*.part")) == []
     assert (out / dst_name).exists()

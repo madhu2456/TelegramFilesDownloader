@@ -38,6 +38,19 @@ Public channel by username:
 venv/bin/python -m src.cli --target https://t.me/someuser123 --out out --limit 100
 ```
 
+4-character Fragment handle:
+
+```bash
+venv/bin/python -m src.cli --target @news --out out --limit 50
+venv/bin/python -m src.cli --target t.me/auto --out out --limit 50
+```
+
+List account dialogs (discover groups, channels, DMs):
+
+```bash
+venv/bin/python -m src.cli --list-dialogs --dialog-filter channel --dialog-limit 50
+```
+
 Private channel link (must already be a member):
 
 ```bash
@@ -61,6 +74,18 @@ Filter by media type + search:
 
 ```bash
 venv/bin/python -m src.cli --target @someuser123 --filter photo --search hello --out out
+```
+
+Incremental sync (resumes after highest downloaded message ID per chat):
+
+```bash
+venv/bin/python -m src.cli --target @someuser123 --sync --out out
+```
+
+Skip messages below or equal to a specific message ID:
+
+```bash
+venv/bin/python -m src.cli --target @someuser123 --min-id 500 --out out
 ```
 
 Dry-run (no bytes, writes messages.jsonl only):
@@ -97,10 +122,11 @@ venv/bin/python -m src.cli --target @someuser123 --takeout --out out --limit 50
 ## 4. Limits and safety notes
 
 - 2GB per-file cap on most accounts; 4GB with Premium. Oversize files fail precheck; use `--max-bytes`.
-- FloodWait: serial 1s + jitter, cap 300s; over cap or PEER_FLOOD exits 3. Back off, do not retry hot.
-- chmod600: session files 0o600, downloads 0o600 files / 0o700 dirs, umask 077. World-writable out refused.
-- Ban-avoidance: limit max 500, serial semaphore(1), no auto-join (`--join` default false), no takeout unless `--takeout`.
-- Disk: ENOSPC precheck via statvfs; manifest UNIQUE(chat_id, msg_id) enables resume-skip without re-download.
+- FloodWait and rate limiting: serial 1s + jitter, cap 300s; `FloodWaitError` exceeding 300s or `PeerFloodError` commits manifest and exits 3. Back off, do not retry hot.
+- Target formats & handles: Supports 7 target forms: `@user`, `t.me/<user>` (supporting 4–32 character handles including 4-character Fragment usernames like `@news` or `t.me/auto`), phone numbers (`+...`), numeric IDs, `t.me/c/<id>/...`, `t.me/+...`, and `t.me/joinchat/...`.
+- Atomic sync checkpoint: `--sync` tracks the maximum message ID in SQLite `sync_checkpoints`. Checkpoint updates are strictly monotonic and advance only upon verified file downloads or recorded skips (never on failed downloads).
+- Deduplication & part file cleanup: SHA-256 hash deduplication records aliases in `messages.jsonl` without re-downloading duplicated payload files. Partial download `.part` files are cleaned up immediately upon alias assignment or same-size skips.
+- Permissions & disk guards: Session files `0o600`, download files `0o600`, directories `0o700`, umask `077`. World-writable output directory is refused (exit 4). Disk space is prechecked before writes (`statvfs`).
 - Manifest: `out/manifest.db` (SQLite `UNIQUE(chat_id, msg_id)`) enables resume-skip; `out/messages.jsonl` is appended per message. `--dry-run` writes `messages.jsonl` only, no bytes. `--resume` keeps `.part` offset, otherwise restarts.
 - Private channels/groups: you must already be a member. Invite links (`t.me/+...`, `t.me/joinchat/...`) require explicit `--join`; without it the run exits 5 (`INVITE_NO_JOIN`). `--join` defaults to false — no auto-join.
 
@@ -108,25 +134,32 @@ venv/bin/python -m src.cli --target @someuser123 --takeout --out out --limit 50
 
 | Flag | Default | Meaning |
 | :--- | :--- | :--- |
-| `--target` | (required) | `@user`, phone, numeric id, `t.me/<user>`, `t.me/c/<id>/...`, or `t.me/+...` invite |
-| `--out` | `out` | Output dir (refused if world-writable, exit 4) |
+| `--target` | none | Target chat: `@user`, phone, numeric ID, `t.me/<user>` (4–32 chars, incl. 4-char Fragment handles), `t.me/c/<id>/...`, or `t.me/+...` invite. Required unless `--list-dialogs` is specified. |
+| `--out` | `out` | Output directory (refused if world-writable, exit 4) |
 | `--limit` | `500` | Message bound, clamped to max 500 |
-| `--filter` | none | Media-type substring match (e.g. `photo`) |
-| `--after` / `--before` | none | Date-window filters |
-| `--from-user` | none | Sender-id substring filter |
-| `--search` | none | Server-side text search |
-| `--ids` | none | Comma-separated message ids (e.g. `10,11,12`) |
+| `--filter` | none | Media-type filter / attribute match (e.g. `photo`, `video`, `audio`, `document`) |
+| `--after` / `--before` | none | Date-window filters ISO-8601 (UTC normalized) |
+| `--from-user` | none | Sender ID or username substring filter |
+| `--search` | none | Server-side text search query |
+| `--ids` | none | Comma-separated message IDs (e.g. `10,11,12`) |
 | `--max-bytes` | none | Stop after this many downloaded bytes |
 | `--timeout` | none | Stop after this many seconds |
 | `--dry-run` | off | Write `messages.jsonl` only, download no bytes |
-| `--resume` | off | Keep `.part` files and resume from offset |
+| `--resume` | off | Keep `.part` files and resume; full restart resume, no false offset |
+| `--min-id` | none | Skip messages with message ID `<= min-id` |
+| `--sync` | off | Persist max message ID per chat to manifest DB; subsequent runs resume from this checkpoint |
 | `--join` | `false` | Opt-in join for invites/channels; no auto-join when absent |
 | `--takeout` | `false` | Opt-in takeout mode; off by default |
-| `--verbose` | off | `DEBUG` logging; default `INFO` |
+| `--list-dialogs` | off | List account dialogs (chats, channels, DMs) in a scrubbed table; `--target` not required |
+| `--dialog-filter` | `all` | Dialog type filter for `--list-dialogs` (`all`, `group`, `channel`, `dm`) |
+| `--dialog-limit` | `100` | Maximum number of dialogs to query and list |
+| `--verbose` | off | Enable `DEBUG` logging; default `INFO` |
 
 ## 6. Troubleshooting (exit codes)
 
-- Exit 2 (auth): re-login, check `TG_PHONE` format (`+[1-9]...`), complete 2FA code prompt.
-- Exit 3 (FloodWait / `PEER_FLOOD`): wait exceeds 300 s cap or flood flag raised. Back off, do not retry hot.
-- Exit 4 (disk/permissions): `ENOSPC` from `statvfs` precheck means no space — free disk or lower `--limit` / `--max-bytes`. World-writable `--out` is refused — use a `0o700` dir.
-- Exit 5 (resolve): `CHANNEL_PRIVATE` / not-a-participant means join the channel first, then retry. `INVITE_NO_JOIN` means re-run the same invite with `--join`. Expired/invalid invite or unknown username also exits 5 — verify the link.
+- Exit 0 (Success): All target messages processed, or dialog list successfully generated.
+- Exit 1 (Configuration / Args): General error or invalid arguments (e.g. `--target` omitted when `--list-dialogs` is not given, missing `.env` variables).
+- Exit 2 (Auth): Authentication error. Re-login required, verify `TG_PHONE` format (`+[1-9]...`), check `TG_API_ID` / `TG_API_HASH`, or complete 2FA code prompt.
+- Exit 3 (Rate limit / `FloodWaitError` / `PeerFloodError`): Wait exceeds 300s safety cap or Telegram returns `PeerFloodError` (excessive actions or query rate on a peer). Pending database operations in `manifest.db` are safely committed before exiting. Back off and wait before retrying; do not retry hot.
+- Exit 4 (Disk / Permissions): `ENOSPC` from `statvfs` precheck means insufficient disk space — free disk or lower `--limit` / `--max-bytes`. Unhandled filesystem I/O errors, or world-writable `--out` directory refused (`0o700` required).
+- Exit 5 (Resolve): Target cannot be resolved or accessed. `CHANNEL_PRIVATE` / not-a-participant means join the channel first, then retry. `INVITE_NO_JOIN` means an invite link was supplied without `--join` (re-run with `--join`). Expired/invalid invite links or unknown handles (including unallocated 4-char Fragment handles) also exit 5.

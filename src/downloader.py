@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from tqdm import tqdm
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, PeerFloodError
 try: from telethon.errors import TakeoutInitDelayError
 except ImportError: TakeoutInitDelayError = None
 try:
@@ -72,7 +72,12 @@ def _ok(m, o):
     ad, bd, md = _dt(o.after, "after"), _dt(o.before, "before"), _dt(getattr(m, "date", None))
     if (ad and md and md < ad) or (bd and md and md > bd): return False
     u = str(getattr(m, "sender_id", "") or "") + str(getattr(getattr(m, "sender", None), "id", "") or "")
-    return not ((o.from_user and str(o.from_user) not in u) or (o.filter and o.filter not in str(type(getattr(m, "media", None)).__name__).lower() and not getattr(getattr(m, "media", None), o.filter, None)))
+    if o.from_user and str(o.from_user) not in u: return False
+    if o.filter:
+        med = getattr(m, "media", None)
+        match = bool(getattr(m, o.filter, None) or getattr(med, o.filter, None) or (med and o.filter in str(type(med).__name__).lower()))
+        if not match: return False
+    return True
 async def download_chat(client, target, opts, out, conn) -> dict:
     lim = min(int(opts.limit or 500), 500); out = Path(out); out.mkdir(parents=True, exist_ok=True)
     ent = getattr(target, "entity", target); cid = int(getattr(ent, "id", 0) or 0)
@@ -97,21 +102,22 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                 async for m in msgs:
                     if _stop or (opts.timeout_s and time.monotonic() - t0 > float(opts.timeout_s)) or (opts.max_bytes is not None and total >= int(opts.max_bytes)): break
                     if not _ok(m, opts): bar.update(1); continue
-                    mid = int(getattr(m, "id", 0) or 0); mx = max(mx, mid)
-                    if is_downloaded(conn, cid, mid): skip += 1; bar.update(1); continue
+                    mid = int(getattr(m, "id", 0) or 0)
+                    if is_downloaded(conn, cid, mid): skip += 1; mx = max(mx, mid); bar.update(1); continue
                     raw = getattr(getattr(m, "file", None), "name", None) or "media"
-                    part = out / (sanitize_component(f"{mid}_{raw}") + ".part")
+                    part = out / (sanitize_component(f"{cid}_{mid}_{raw}") + ".part")
                     if not opts.resume and part.exists(): part.unlink()
                     sz = int(getattr(getattr(m, "file", None), "size", 0) or 0)
                     if sz: precheck_disk(out, sz)
                     meta = {k: v for k, v in _meta(m).items() if v is not None}
-                    if opts.dry_run: append_jsonl(jl, {"id": mid, "dry": True, **meta}); done += 1; bar.update(1)
+                    if opts.dry_run: append_jsonl(jl, {"id": mid, "dry": True, **meta}); done += 1; mx = max(mx, mid); bar.update(1)
                     else:
                         for att in range(3):
                             try: await active.download_media(m, file=str(part)); break
-                            except FloodWaitError as e:
+                            except (FloodWaitError, PeerFloodError) as e:
+                                if isinstance(e, PeerFloodError) or "PEER_FLOOD" in str(e).upper(): conn.commit(); raise
                                 s = int(getattr(e, "seconds", 0) or 0)
-                                if s > FLOOD_CAP or "PEER_FLOOD" in str(e).upper(): conn.commit(); raise
+                                if s > FLOOD_CAP: conn.commit(); raise
                                 await _isleep(s or 1)
                         else: break
                         if part.exists():
@@ -126,15 +132,32 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                                 except OSError: pass
                                 fn2 = dst.name if dst.exists() else str(dup[1]); sz2 = (dst.stat().st_size if dst.exists() else 0) or (prev.stat().st_size if prev.exists() else 0)
                                 part.unlink(missing_ok=True)
-                                record_download(conn, cid, mid, h, sz2, fn2, meta); append_jsonl(jl, {"id": mid, "file": fn2, "sha": h, "alias_of": int(dup[0]), **meta}); done += 1
+                                record_download(conn, cid, mid, h, sz2, fn2, meta); append_jsonl(jl, {"id": mid, "file": fn2, "sha": h, "alias_of": int(dup[0]), **meta}); done += 1; mx = max(mx, mid)
                             else:
-                                if dst.exists() and dst.stat().st_size == part.stat().st_size: part.unlink(missing_ok=True); skip += 1
-                                else: os.replace(str(part), str(dst)); os.chmod(str(dst), 0o600)
-                                record_download(conn, cid, mid, h, dst.stat().st_size if dst.exists() else 0, dst.name, meta); append_jsonl(jl, {"id": mid, "file": dst.name, "sha": h, **meta}); total += dst.stat().st_size if dst.exists() else 0; done += 1
+                                if dst.exists() and dst.stat().st_size == part.stat().st_size:
+                                    part.unlink(missing_ok=True)
+                                    skip += 1
+                                    record_download(conn, cid, mid, h, dst.stat().st_size, dst.name, meta=_meta(m))
+                                    append_jsonl(jl, {"id": mid, "skipped": True, "path": dst.name, **_meta(m)})
+                                    mx = max(mx, mid)
+                                else:
+                                    os.replace(str(part), str(dst))
+                                    os.chmod(str(dst), 0o600)
+                                    try:
+                                        pfd = os.open(str(dst.parent), os.O_RDONLY)
+                                        os.fsync(pfd)
+                                        os.close(pfd)
+                                    except OSError:
+                                        pass
+                                    record_download(conn, cid, mid, h, dst.stat().st_size if dst.exists() else 0, dst.name, meta)
+                                    append_jsonl(jl, {"id": mid, "file": dst.name, "sha": h, **meta})
+                                    total += dst.stat().st_size if dst.exists() else 0
+                                    done += 1
+                                    mx = max(mx, mid)
                     bar.update(1); await asyncio.sleep(1.0 + random.random() * 0.5)
-            except FloodWaitError as e:
+            except (FloodWaitError, PeerFloodError) as e:
                 s = int(getattr(e, "seconds", 0) or 0)
-                if s > FLOOD_CAP or "PEER_FLOOD" in type(e).__name__.upper() or "PEER_FLOOD" in str(e).upper(): conn.commit(); raise
+                if isinstance(e, PeerFloodError) or s > FLOOD_CAP or "PEER_FLOOD" in type(e).__name__.upper() or "PEER_FLOOD" in str(e).upper(): conn.commit(); raise
                 await _isleep(min(s or 1, FLOOD_CAP))
             finally: bar.close()
     finally:

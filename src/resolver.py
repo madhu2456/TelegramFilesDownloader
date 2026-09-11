@@ -30,21 +30,23 @@ def parse_target(raw: str) -> dict:
     m = re.fullmatch(r"(?:https?://)?t\.me/(?:joinchat/|\+)([A-Za-z0-9_-]+)", s)
     if m:
         return {"kind": "invite", "value": m.group(1)}
-    m = re.fullmatch(r"(?:https?://)?t\.me/([A-Za-z0-9_]{5,32})", s)
+    m = re.fullmatch(r"(?:https?://)?t\.me/([A-Za-z0-9_]{4,32})", s)
     if m:
         return {"kind": "username", "value": m.group(1)}
-    m = re.fullmatch(r"@([A-Za-z0-9_]{5,32})", s)
+    m = re.fullmatch(r"@([A-Za-z0-9_]{4,32})", s)
     if m:
         return {"kind": "username", "value": m.group(1)}
     raise ResolveError(f"unrecognized target: {s}", code="BAD_FORMAT")
 async def check_membership(client, entity) -> bool:
     if client is None or entity is None:
         return False
+    if type(entity).__name__ in ("User", "Chat") or (getattr(entity, "broadcast", False) and getattr(entity, "username", None)):
+        return True
     try:
         me = await client.get_me()
         await client(GetParticipantRequest(entity, me))
         return True
-    except (ChannelPrivateError, UserNotParticipantError, ValueError) as e:
+    except (ChannelPrivateError, UserNotParticipantError, ValueError, TypeError) as e:
         log.info("membership miss: %s", type(e).__name__)
         return False
 async def resolve_target(client, raw: str, join: bool = False, dialogs_cache: dict | None = None) -> ResolvedTarget:
@@ -73,7 +75,7 @@ async def resolve_target(client, raw: str, join: bool = False, dialogs_cache: di
         else:
             raise ResolveError(f"invite needs join=True: {raw}", code="INVITE_NO_JOIN")
     else:
-        if join:
+        if join and (getattr(entity, "broadcast", False) or getattr(entity, "megagroup", False)):
             await client(JoinChannelRequest(entity))
         if not await check_membership(client, entity):
             raise ResolveError(f"not participant: {raw}", code="NOT_PARTICIPANT")

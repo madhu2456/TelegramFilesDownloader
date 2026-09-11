@@ -3,7 +3,7 @@ import argparse, asyncio, logging, os, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from telethon import TelegramClient
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, PeerFloodError
 try:
     from .config import ensure_out_dir, load_config
     from .resolver import ResolveError, resolve_target
@@ -58,7 +58,7 @@ def main(argv=None) -> int:
                 print(format_dialog_table(rows))
                 return 0
         try: return asyncio.run(_list())
-        except FloodWaitError: return 3
+        except (FloodWaitError, PeerFloodError): return 3
         except (OSError, IOError): return 4
         except SystemExit as e: return int(e.code) if str(getattr(e, "code", "")).isdigit() else 1
         except Exception as e:
@@ -78,10 +78,10 @@ def main(argv=None) -> int:
             except ResolveError as e: return 5 if getattr(e, "code", "") == "EXIT5" else 5
             db = init_db(Path(out) / "manifest.db")
             try: return await download_chat(c, t, opts, out, db)
-            except FloodWaitError: return 3
+            except (FloodWaitError, PeerFloodError): return 3
         return 0
     try: r = asyncio.run(_run())
-    except FloodWaitError: return 3
+    except (FloodWaitError, PeerFloodError): return 3
     except (OSError, IOError): return 4
     except SystemExit as e: return int(e.code) if str(getattr(e, "code", "")).isdigit() else 1
     except Exception as e:

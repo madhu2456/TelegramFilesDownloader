@@ -69,3 +69,21 @@ def test_taxonomy_private_exit5_nojoin():
         asyncio.run(resolve_target(c3, "https://t.me/+AAAAbbbb", join=False))
     assert e3.value.code == "INVITE_NO_JOIN"
     assert "join" in str(e3.value).lower()
+
+
+def test_parse_target_four_char_handles():
+    assert parse_target("@news") == {"kind": "username", "value": "news"}
+    assert parse_target("t.me/auto") == {"kind": "username", "value": "auto"}
+    assert parse_target("https://t.me/tele") == {"kind": "username", "value": "tele"}
+
+
+def test_user_entity_bypasses_participant_check():
+    c = AsyncMock()
+    user_cls = type("User", (), {"id": 12345, "broadcast": False, "megagroup": False})
+    user = user_cls()
+    c.get_entity.return_value = user
+    r = asyncio.run(resolve_target(c, "@userbot", join=True))
+    assert r.entity is user
+    assert r.kind == "username"
+    assert not any("JoinChannelRequest" in str(call) for call in c.mock_calls)
+    assert not any("GetParticipantRequest" in str(call) for call in c.mock_calls)

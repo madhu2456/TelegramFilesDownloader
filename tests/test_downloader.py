@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon.errors import FloodWaitError, TakeoutInitDelayError
-from src.downloader import DownloadOpts, _dt, download_chat
+from src.downloader import DownloadOpts, _dt, _ok, download_chat
 from src.filesafe import build_filename, sanitize_component
 from src.store import get_sync_checkpoint, init_db, record_download, set_sync_checkpoint
 def _msg(mid=1, name="f.bin", size=10):
@@ -84,7 +84,7 @@ def test_resume_unique_skip(tmp_path):
     assert not c.download_media.called
 def test_resume_part_delete_vs_keep(tmp_path):
     out_noresume = tmp_path / "noresume"; out_noresume.mkdir()
-    part_nr = out_noresume / (sanitize_component("1_f.bin") + ".part")
+    part_nr = out_noresume / (sanitize_component("1_1_f.bin") + ".part")
     part_nr.write_bytes(b"stale")
     seen_nr = {}
     async def _dl_nr(m, file=None):
@@ -96,7 +96,7 @@ def test_resume_part_delete_vs_keep(tmp_path):
     assert r_nr["done"] == 1
     assert not part_nr.exists()
     out_resume = tmp_path / "resume"; out_resume.mkdir()
-    part_r = out_resume / (sanitize_component("1_f.bin") + ".part")
+    part_r = out_resume / (sanitize_component("1_1_f.bin") + ".part")
     part_r.write_bytes(b"stale")
     seen_r = {}
     async def _dl_r(m, file=None):
@@ -209,3 +209,34 @@ def test_sync_checkpoint_persists_and_min_id(tmp_path):
     _run(c2, _tgt(cid=1), DownloadOpts(limit=10, sync=True, min_id=20), tmp_path, conn)
     assert c2.iter_messages.call_args[1]["min_id"] == 20
     assert get_sync_checkpoint(conn, 1) == 11
+
+
+def test_filter_matching_message_helper_properties(tmp_path):
+    m_video = SimpleNamespace(id=101, date="2024-01-01", sender_id=1, sender=SimpleNamespace(id=1), media=None, file=SimpleNamespace(name="v.mp4", size=10), video=True, audio=None, photo=None)
+    m_audio = SimpleNamespace(id=102, date="2024-01-01", sender_id=1, sender=SimpleNamespace(id=1), media=None, file=SimpleNamespace(name="a.mp3", size=10), video=None, audio=True, photo=None)
+
+    assert _ok(m_video, DownloadOpts(filter="video")) is True
+    assert _ok(m_video, DownloadOpts(filter="audio")) is False
+    assert _ok(m_audio, DownloadOpts(filter="video")) is False
+    assert _ok(m_audio, DownloadOpts(filter="audio")) is True
+    assert _ok(m_video, DownloadOpts(filter="photo")) is False
+
+
+def test_peer_flood_error_exit_code_3(tmp_path):
+    from src.cli import main
+    from telethon.errors import PeerFloodError
+
+    with patch("src.cli.load_config") as mock_cfg, \
+         patch("src.cli.get_client") as mock_get_client, \
+         patch("src.cli.resolve_target", new=AsyncMock(return_value=SimpleNamespace(entity=SimpleNamespace(id=1)))), \
+         patch("src.cli.init_db", return_value=init_db(":memory:")), \
+         patch("src.cli.download_chat", new=AsyncMock(side_effect=PeerFloodError(None))):
+
+        mock_cfg.return_value = SimpleNamespace(session_path="s", api_id=1, api_hash="h", takeout=False)
+        dummy_client = AsyncMock()
+        dummy_client.__aenter__ = AsyncMock(return_value=dummy_client)
+        dummy_client.__aexit__ = AsyncMock(return_value=None)
+        mock_get_client.return_value = dummy_client
+
+        exit_code = main(["--target", "@testchan", "--out", str(tmp_path)])
+        assert exit_code == 3

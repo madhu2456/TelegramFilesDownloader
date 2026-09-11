@@ -98,3 +98,19 @@ def test_sync_checkpoint_updates_to_max_and_min_id_passthrough(tmp_path):
     _run(c3, _tgt(9), DownloadOpts(limit=10), tmp_path, conn)
     assert c3.iter_messages.call_args[1]["min_id"] is None
     assert get_sync_checkpoint(conn, 9) == 12
+
+
+def test_sync_download_failure_does_not_advance_checkpoint(tmp_path):
+    conn = init_db(":memory:")
+    set_sync_checkpoint(conn, 9, 10)
+
+    async def _dl(m, file=None):
+        if m.id == 11:
+            Path(str(file)).write_bytes(b"content")
+        # mid=12 fails (no part file written)
+
+    c = _cli([_msg(mid=11), _msg(mid=12)], _dl)
+    r = _run(c, _tgt(9), DownloadOpts(limit=10, sync=True), tmp_path, conn)
+    assert r["done"] == 1
+    # Checkpoint advances for successful mid=11, but NOT for failed mid=12
+    assert get_sync_checkpoint(conn, 9) == 11
