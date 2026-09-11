@@ -597,11 +597,15 @@ async function updateStorage() {
     const data = await res.json();
     const freeGb = (data.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const totalGb = (data.total_bytes / (1024 * 1024 * 1024)).toFixed(1);
+    const usedGb = (data.used_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const pill = document.getElementById('storagePill');
-    pill.innerText = `Disk: ${freeGb}G / ${totalGb}G (${data.used_percent}% used)`;
-    if (data.is_low_space) {
-      pill.style.borderColor = 'var(--accent-crimson)';
-      pill.style.color = '#F87171';
+    if (pill) {
+      pill.innerText = `Disk: ${freeGb}G free / ${totalGb}G (${data.used_percent}% used)`;
+      pill.title = `Partition Storage: ${usedGb} GB used, ${freeGb} GB free of ${totalGb} GB total`;
+      if (data.is_low_space) {
+        pill.style.borderColor = 'var(--accent-crimson)';
+        pill.style.color = '#F87171';
+      }
     }
   } catch (e) {}
 }
