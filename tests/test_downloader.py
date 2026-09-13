@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon.errors import FloodWaitError, TakeoutInitDelayError
-from src.downloader import DownloadOpts, _dt, _ok, download_chat
+from src.downloader import DownloadOpts, _dt, _meta, _ok, _rxn, download_chat
 from src.filesafe import build_filename, sanitize_component
 from src.store import get_sync_checkpoint, init_db, record_download, set_sync_checkpoint
 def _msg(mid=1, name="f.bin", size=10):
@@ -232,7 +232,7 @@ def test_peer_flood_error_exit_code_3(tmp_path):
          patch("src.cli.init_db", return_value=init_db(":memory:")), \
          patch("src.cli.download_chat", new=AsyncMock(side_effect=PeerFloodError(None))):
 
-        mock_cfg.return_value = SimpleNamespace(session_path="s", api_id=1, api_hash="h", takeout=False)
+        mock_cfg.return_value = SimpleNamespace(session_path=str(tmp_path / "s"), api_id=1, api_hash="h", takeout=False)
         dummy_client = AsyncMock()
         dummy_client.__aenter__ = AsyncMock(return_value=dummy_client)
         dummy_client.__aexit__ = AsyncMock(return_value=None)
@@ -250,3 +250,274 @@ def test_reverse_with_none_min_id_passes_zero(tmp_path):
     c2 = _cli([])
     _run(c2, _tgt(), DownloadOpts(limit=10, reverse=False, min_id=None), tmp_path, init_db(":memory:"))
     assert c2.iter_messages.call_args[1]["min_id"] is None
+
+
+def test_downloader_cancel_event(tmp_path):
+    cancel_event = asyncio.Event()
+
+    def _msg_custom(mid):
+        m = MagicMock()
+        m.id = mid
+        m.date = "2024-01-01"
+        m.sender_id = 1
+        m.sender = SimpleNamespace(id=1)
+        m.media = None
+        m.file = SimpleNamespace(name="f.bin", size=10)
+        return m
+
+    async def _agen_cancel():
+        for i in range(1, 10):
+            if i == 3:
+                cancel_event.set()
+            yield _msg_custom(i)
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen_cancel())
+    c.download_media = AsyncMock()
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=10)
+    setattr(opts, "cancel_event", cancel_event)
+
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        r = asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+    assert r["done"] < 5
+    assert cancel_event.is_set()
+
+
+def test_downloader_max_bytes_boundary(tmp_path):
+    def _msg_sized(mid, sz=50):
+        m = MagicMock()
+        m.id = mid
+        m.date = "2024-01-01"
+        m.sender_id = 1
+        m.sender = SimpleNamespace(id=1)
+        m.media = None
+        m.file = SimpleNamespace(name="f.bin", size=sz)
+        return m
+
+    async def _agen_msgs():
+        for i in range(1, 20):
+            yield _msg_sized(i, 50)
+
+    async def _dl_write(m, file=None):
+        Path(str(file)).write_bytes(b"x" * 50)
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen_msgs())
+    c.download_media = AsyncMock(side_effect=_dl_write)
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=10, max_bytes=100)
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        r = asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+    assert r["done"] == 2
+    assert r["bytes"] == 100
+
+
+def test_downloader_date_before_and_from_user_filters():
+    m1 = SimpleNamespace(id=1, date="2024-01-01T10:00:00+00:00", sender_id=123, sender=SimpleNamespace(id=123))
+    m2 = SimpleNamespace(id=2, date="2024-01-05T10:00:00+00:00", sender_id=456, sender=SimpleNamespace(id=456))
+
+    # Before filter
+    o_before = DownloadOpts(before="2024-01-03T00:00:00+00:00")
+    assert _ok(m1, o_before) is True
+    assert _ok(m2, o_before) is False
+
+    # From user filter
+    o_user = DownloadOpts(from_user="123")
+    assert _ok(m1, o_user) is True
+    assert _ok(m2, o_user) is False
+
+
+def test_downloader_takeout_unhandled_error_reraises(tmp_path):
+    tcx = AsyncMock()
+    tcx.__aenter__ = AsyncMock(side_effect=PermissionError("Takeout not permitted"))
+    tcx.__aexit__ = AsyncMock(return_value=None)
+
+    c = AsyncMock()
+    c.takeout = MagicMock(return_value=tcx)
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=10, takeout=True)
+
+    with pytest.raises(PermissionError, match="Takeout not permitted"):
+        asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+
+def test_downloader_flood_cap_exceeded_commits_and_raises(tmp_path):
+    async def _agen_one():
+        yield _msg(1)
+
+    async def _dl_flood(m, file=None):
+        raise FloodWaitError(None, 400)
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen_one())
+    c.download_media = AsyncMock(side_effect=_dl_flood)
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=10)
+
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        with pytest.raises(FloodWaitError):
+            asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+
+def test_downloader_meta_helpers():
+    r_list = SimpleNamespace(results=[SimpleNamespace(count=3), SimpleNamespace(count=7)])
+    m = SimpleNamespace(reactions=r_list)
+    assert _rxn(m) == 10
+
+    m2 = SimpleNamespace(reactions=5)
+    assert _rxn(m2) == 5
+
+    m_long = SimpleNamespace(
+        id=1,
+        date="2024-01-01T00:00:00+00:00",
+        sender_id=1,
+        sender=SimpleNamespace(id=1),
+        reply_to_msg_id=None,
+        grouped_id=None,
+        views=None,
+        forwards=None,
+        reactions=None,
+        file=None,
+        text="A" * 300,
+    )
+    meta = _meta(m_long)
+    assert len(meta["snippet"]) == 200
+
+
+def test_downloader_isleep_cancel_event():
+    from src.downloader import _isleep
+    import threading
+
+    ce = threading.Event()
+    ce.set()
+    # Sleep 10s should return almost immediately because cancel_event is set
+    asyncio.run(_isleep(10, cancel_event=ce))
+
+
+def test_downloader_flood_wait_hook_invocation(tmp_path):
+    async def _agen_one():
+        yield _msg(1)
+
+    hook_calls = []
+
+    def hook(*args, **kwargs):
+        if args:
+            hook_calls.append(args[0])
+        elif kwargs:
+            hook_calls.append(kwargs)
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=1, progress_hook=hook)
+
+    attempts = [0]
+    async def _dl_flood_once(m, file=None, progress_callback=None):
+        attempts[0] += 1
+        if attempts[0] == 1:
+            raise FloodWaitError(None, 12)
+        Path(str(file)).write_bytes(b"data")
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen_one())
+    c.download_media = AsyncMock(side_effect=_dl_flood_once)
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+    assert any(isinstance(call, dict) and call.get("event") == "FLOOD_WAIT" and call.get("wait_seconds") == 12 for call in hook_calls)
+
+
+def test_downloader_chunk_progress_callback(tmp_path):
+    async def _agen_one():
+        yield _msg(1, name="file.bin", size=100)
+
+    async def _dl_with_chunks(m, file=None, progress_callback=None):
+        if progress_callback:
+            progress_callback(50, 100)
+            progress_callback(100, 100)
+        Path(str(file)).write_bytes(b"x" * 100)
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen_one())
+    c.download_media = AsyncMock(side_effect=_dl_with_chunks)
+
+    progress_events = []
+
+    def hook(**kwargs):
+        progress_events.append(kwargs)
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(limit=1, progress_hook=hook)
+
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        real_time = [100.0]
+        def fake_time():
+            real_time[0] += 0.5
+            return real_time[0]
+        with patch("src.downloader.time.monotonic", side_effect=fake_time):
+            asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+
+    assert any(evt.get("current_file") == "file.bin" for evt in progress_events)
+
+
+def test_parse_bytes_helper():
+    from src.cli import parse_bytes
+    assert parse_bytes(None) is None
+    assert parse_bytes("10MB") == 10 * 1024 * 1024
+    assert parse_bytes("500KB") == 500 * 1024
+    assert parse_bytes("2GB") == 2 * 1024 * 1024 * 1024
+    assert parse_bytes("1048576") == 1048576
+    assert parse_bytes(1048576) == 1048576
+    with pytest.raises(ValueError):
+        parse_bytes("-5MB")
+    with pytest.raises(ValueError):
+        parse_bytes("10XYZ")
+
+
+def test_downloader_ok_filters():
+    from src.downloader import DownloadOpts, _ok
+    from types import SimpleNamespace
+
+    m1 = SimpleNamespace(id=50, file=SimpleNamespace(size=5000, name="video.mp4", ext=".mp4"))
+    m2 = SimpleNamespace(id=150, file=SimpleNamespace(size=50000, name="image.jpg", ext=".jpg"))
+
+    # max_id
+    assert _ok(m1, DownloadOpts(max_id=100)) is True
+    assert _ok(m2, DownloadOpts(max_id=100)) is False
+
+    # min_size & max_size
+    assert _ok(m1, DownloadOpts(min_size=1000, max_size=10000)) is True
+    assert _ok(m1, DownloadOpts(min_size=10000)) is False
+    assert _ok(m2, DownloadOpts(max_size=10000)) is False
+
+    # pattern
+    assert _ok(m1, DownloadOpts(pattern="*.mp4")) is True
+    assert _ok(m2, DownloadOpts(pattern="*.mp4")) is False
+
+
+def test_downloader_reverse_max_id_break(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from src.downloader import DownloadOpts, download_chat
+    from src.store import init_db
+
+    async def _agen():
+        for i in [10, 20, 30, 40, 50]:
+            yield SimpleNamespace(id=i, file=SimpleNamespace(size=10, name=f"f{i}.bin", ext=".bin"), date=None)
+
+    c = AsyncMock()
+    c.iter_messages = MagicMock(return_value=_agen())
+    c.download_media = AsyncMock(side_effect=lambda m, file=None, progress_callback=None: Path(str(file)).write_bytes(b"x"))
+
+    conn = init_db(":memory:")
+    opts = DownloadOpts(reverse=True, max_id=30, limit=100)
+    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
+        r = asyncio.run(download_chat(c, SimpleNamespace(id=1), opts, tmp_path, conn))
+
+    assert r["done"] == 2
+

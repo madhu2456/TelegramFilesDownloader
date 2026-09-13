@@ -15,7 +15,7 @@ class JobConflictError(Exception):
 class JobManager:
     """Thread-safe and async-safe manager for download executions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = asyncio.Lock()
         self._is_running: bool = False
         self._active_job_id: str | None = None
@@ -35,6 +35,7 @@ class JobManager:
             "speed_mbps": 0.0,
             "eta_seconds": None,
             "current_file": None,
+            "current_file_path": None,
             "flood_wait_seconds": None,
             "started_at": None,
             "finished_at": None,
@@ -142,9 +143,29 @@ class JobManager:
 
     async def _run_job(self, job_id: str, client, target, opts, out, conn) -> None:
         t0 = time.monotonic()
+
+        def _on_progress(done=0, skip=0, total_bytes=0, total_msgs=None, current_file=None, speed_mbps=0.0, eta_seconds=None, **kwargs):
+            if isinstance(done, dict):
+                if done.get("event") == "FLOOD_WAIT":
+                    self.set_flood_wait(int(done.get("wait_seconds") or 0))
+                return
+            self._snapshot["flood_wait_seconds"] = None
+            self._snapshot["downloaded_msgs"] = done
+            self._snapshot["skipped_msgs"] = skip
+            self._snapshot["bytes_total"] = total_bytes
+            self._snapshot["current_file"] = current_file
+            if "relpath" in kwargs or "current_file_path" in kwargs:
+                self._snapshot["current_file_path"] = kwargs.get("relpath") or kwargs.get("current_file_path")
+            self._snapshot["speed_mbps"] = round(speed_mbps, 2)
+            self._snapshot["eta_seconds"] = eta_seconds
+            if total_msgs and total_msgs > 0:
+                self._snapshot["progress"] = round(min(100.0, ((done + skip) / total_msgs) * 100), 1)
+            self._broadcast({"type": "PROGRESS", "state": self.get_snapshot()})
+
         try:
             from src.downloader import download_chat
             setattr(opts, "cancel_event", self._cancel_event)
+            setattr(opts, "progress_hook", _on_progress)
 
             res = await download_chat(client, target, opts, out, conn)
             status = "cancelled" if self._cancel_event.is_set() else "completed"
@@ -169,6 +190,10 @@ class JobManager:
             self.add_log(f"Job {job_id} error: {exc}")
             self._broadcast({"type": "FAILED", "state": self.get_snapshot(), "error": str(exc)})
         finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
             async with self._lock:
                 self._is_running = False
                 self._active_job_id = None

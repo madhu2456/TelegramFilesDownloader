@@ -17,3 +17,5 @@ out/
 .ruff_cache/
 .vscode/
 .idea/
+*.pid
+.*.pid

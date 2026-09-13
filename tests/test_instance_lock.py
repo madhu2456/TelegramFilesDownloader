@@ -120,3 +120,74 @@ def test_dynamic_port_allocation():
     finally:
         blocker.close()
 
+
+def test_acquire_lock_with_dead_pid(tmp_path: Path):
+    session = tmp_path / "dead_pid.session"
+    session.touch()
+    lock_path = get_lock_file(session)
+    lock_path.write_text("99999999")
+
+    lock = acquire_instance_lock(session)
+    assert lock.exists()
+    assert lock.read_text().strip() == str(os.getpid())
+    cleanup_instance_lock()
+    assert not lock.exists()
+
+
+def test_cleanup_instance_lock_idempotent():
+    cleanup_instance_lock()
+    cleanup_instance_lock()
+
+
+def test_terminate_existing_process_sigkill_escalation(monkeypatch):
+    """If process does not terminate after SIGTERM, SIGKILL is issued."""
+    import signal
+    signals_sent = []
+
+    def mock_kill(pid, sig):
+        signals_sent.append(sig)
+
+    monkeypatch.setattr("os.kill", mock_kill)
+
+    def mock_is_alive(pid):
+        # Stays alive until SIGKILL is received
+        return signal.SIGKILL not in signals_sent
+
+    monkeypatch.setattr("src.instance_lock._is_pid_alive", mock_is_alive)
+    monkeypatch.setattr("src.instance_lock.is_zombie", lambda pid: False)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+
+    curr_time = [100.0]
+
+    def mock_monotonic():
+        curr_time[0] += 0.05
+        return curr_time[0]
+
+    monkeypatch.setattr("time.monotonic", mock_monotonic)
+
+    res = terminate_existing_process(99999, timeout=0.1)
+    assert res is True
+    assert signal.SIGTERM in signals_sent
+    assert signal.SIGKILL in signals_sent
+
+
+def test_cleanup_instance_lock_does_not_unlink_on_stat_exception(tmp_path: Path):
+    session = tmp_path / "stat_err.session"
+    session.touch()
+    lock = acquire_instance_lock(session)
+    assert lock.exists()
+
+    with patch.object(Path, "stat", side_effect=OSError("Disk error")):
+        cleanup_instance_lock()
+
+    # Active lock should NOT have been unlinked unconditionally
+    assert lock.exists()
+    lock.unlink(missing_ok=True)
+
+
+def test_is_pid_matching_app_returns_false_on_cmdline_failure():
+    with patch("pathlib.Path.exists", return_value=False), \
+         patch("subprocess.run", side_effect=Exception("ps failed")), \
+         patch("src.instance_lock._is_pid_alive", return_value=True):
+        assert is_pid_matching_app(12345) is False
+

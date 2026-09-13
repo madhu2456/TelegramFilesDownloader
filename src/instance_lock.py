@@ -12,6 +12,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 _active_lock_path: Path | None = None
+_active_lock_fd: int | None = None
 
 
 def get_lock_file(session_path: Path | str) -> Path:
@@ -22,7 +23,7 @@ def get_lock_file(session_path: Path | str) -> Path:
 
 def is_pid_matching_app(pid: int) -> bool:
     """Check if a PID belongs to this project with Linux /proc and portable fallback."""
-    markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web", "python")
+    markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web")
     proc_path = Path(f"/proc/{pid}")
     if proc_path.exists():
         try:
@@ -47,7 +48,7 @@ def is_pid_matching_app(pid: int) -> bool:
             return any(m in cmd for m in markers)
     except Exception:
         pass
-    return _is_pid_alive(pid)
+    return False
 
 
 def is_zombie(pid: int) -> bool:
@@ -114,40 +115,57 @@ def terminate_existing_process(pid: int, timeout: float = 2.0) -> bool:
 
 def acquire_instance_lock(session_path: Path | str) -> Path:
     """Acquire single-instance lock for the given session, terminating any previous instance."""
-    global _active_lock_path
+    global _active_lock_path, _active_lock_fd
     lock_path = get_lock_file(session_path)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Open/create lockfile and acquire exclusive advisory lock
-    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
-    try:
+    deadline = time.monotonic() + 4.0
+    fd = None
+    while time.monotonic() < deadline:
+        candidate_fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0), 0o600)
+        try:
+            fcntl.flock(candidate_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            st_fd = os.fstat(candidate_fd)
+            try:
+                st_path = lock_path.stat()
+                if (st_fd.st_dev, st_fd.st_ino) != (st_path.st_dev, st_path.st_ino):
+                    os.close(candidate_fd)
+                    time.sleep(0.05)
+                    continue
+            except FileNotFoundError:
+                os.close(candidate_fd)
+                time.sleep(0.05)
+                continue
+
+            fd = candidate_fd
+            break
+        except (BlockingIOError, OSError):
+            try:
+                content = Path(lock_path).read_text(encoding="utf-8").strip()
+                if content.isdigit():
+                    old_pid = int(content)
+                    if old_pid > 0 and old_pid != os.getpid() and _is_pid_alive(old_pid):
+                        if is_pid_matching_app(old_pid):
+                            log.info("Terminating previous instance (PID %d) for session %s.", old_pid, session_path)
+                            terminate_existing_process(old_pid)
+                        else:
+                            log.info("PID %d is not a matching app process; treating lock as stale.", old_pid)
+            except Exception:
+                pass
+            os.close(candidate_fd)
+            time.sleep(0.1)
+
+    if fd is None:
+        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0), 0o600)
         fcntl.flock(fd, fcntl.LOCK_EX)
 
-        # Read existing PID
-        content = os.pread(fd, 64, 0).decode("utf-8", errors="replace").strip()
-        if content:
-            try:
-                old_pid = int(content)
-                if old_pid > 0 and old_pid != os.getpid() and _is_pid_alive(old_pid):
-                    if is_pid_matching_app(old_pid):
-                        log.info("Terminating previous instance (PID %d) for session %s.", old_pid, session_path)
-                        terminate_existing_process(old_pid)
-                    else:
-                        log.info("PID %d is not a matching app process; treating lock as stale.", old_pid)
-            except ValueError:
-                pass
+    # Write current PID
+    pid_bytes = str(os.getpid()).encode("utf-8")
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, pid_bytes, 0)
+    os.fchmod(fd, 0o600)
 
-        # Write current PID
-        pid_bytes = str(os.getpid()).encode("utf-8")
-        os.ftruncate(fd, 0)
-        os.pwrite(fd, pid_bytes, 0)
-        os.fchmod(fd, 0o600)
-
-    finally:
-        # Release advisory lock but keep file
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
-
+    _active_lock_fd = fd
     _active_lock_path = lock_path
 
     # Register cleanup handlers
@@ -181,27 +199,32 @@ def acquire_instance_lock(session_path: Path | str) -> Path:
 
 
 def cleanup_instance_lock() -> None:
-    """Remove lockfile under flock protection only if it still contains our PID and matches inode."""
-    global _active_lock_path
+    """Remove lockfile and release flock descriptor cleanly without deadlock."""
+    global _active_lock_path, _active_lock_fd
     lock_path = _active_lock_path
-    _active_lock_path = None  # Re-entrancy guard
-    if lock_path is None:
-        return
-    try:
-        if lock_path.exists():
-            fd = os.open(str(lock_path), os.O_RDWR)
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX)
-                # Verify inode match to prevent unlinking newly created file
-                st_fd = os.fstat(fd)
-                st_path = lock_path.stat()
-                if (st_fd.st_dev, st_fd.st_ino) == (st_path.st_dev, st_path.st_ino):
-                    content = os.pread(fd, 64, 0).decode("utf-8", errors="replace").strip()
-                    if content == str(os.getpid()):
+    fd = _active_lock_fd
+    _active_lock_path = None
+    _active_lock_fd = None
+
+    if fd is not None:
+        try:
+            if lock_path is not None and lock_path.exists():
+                try:
+                    st_fd = os.fstat(fd)
+                    st_path = lock_path.stat()
+                    if (st_fd.st_dev, st_fd.st_ino) == (st_path.st_dev, st_path.st_ino):
                         lock_path.unlink(missing_ok=True)
                         log.info("Instance lock released: %s", lock_path)
-            finally:
+                except Exception as e:
+                    log.warning("Failed to verify lockfile inode before unlinking %s: %s", lock_path, e)
+        finally:
+            try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
                 os.close(fd)
-    except (OSError, FileNotFoundError):
-        pass
+            except OSError:
+                pass
+    elif lock_path is not None and lock_path.exists():
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            pass

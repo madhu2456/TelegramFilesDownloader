@@ -30,24 +30,34 @@ def classify_mime(mime: str | None, relpath: str) -> str:
     return "document"
 
 
-def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int]:
-    if not range_header or not range_header.startswith("bytes="):
+def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int] | None:
+    if file_size == 0:
+        return None
+    if not range_header:
         return (0, file_size - 1)
+    if not range_header.startswith("bytes="):
+        return None
     rng = range_header[6:].strip()
     parts = rng.split("-", 1)
     if len(parts) != 2:
-        return (0, file_size - 1)
+        return None
     s_str, e_str = parts[0].strip(), parts[1].strip()
-    if s_str == "":
-        length = int(e_str) if e_str.isdigit() else 0
-        start = max(0, file_size - length)
-        end = file_size - 1
-    elif e_str == "":
-        start = int(s_str)
-        end = file_size - 1
-    else:
-        start = int(s_str)
-        end = int(e_str)
+    try:
+        if s_str == "":
+            length = int(e_str) if e_str.isdigit() else 0
+            start = max(0, file_size - length)
+            end = file_size - 1
+        elif e_str == "":
+            start = int(s_str)
+            end = file_size - 1
+        else:
+            start = int(s_str)
+            end = int(e_str)
+    except ValueError:
+        return None
+
+    if file_size == 0:
+        return None
 
     if start >= file_size or start > end or start < 0:
         raise HTTPException(
@@ -61,7 +71,7 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, i
 
 @router.get("/api/media")
 async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str | None = None):
-    out_dir = Path(getattr(request.app.state, "out_dir", "out"))
+    out_dir = Path(getattr(request.app.state, "out_dir", "out")).resolve()
     db_path = out_dir / "manifest.db"
     limit = min(max(1, limit), 100)
     page = max(1, page)
@@ -82,10 +92,27 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
         mime_expr = "mime" if "mime" in have_cols else "NULL AS mime"
         snippet_expr = "snippet" if "snippet" in have_cols else "NULL AS snippet"
 
+        where_clauses = []
+        if kind and kind != "all":
+            k_lower = kind.lower()
+            video_cond = "(LOWER(COALESCE(mime, '')) LIKE 'video/%' OR LOWER(relpath) LIKE '%.mp4' OR LOWER(relpath) LIKE '%.mkv' OR LOWER(relpath) LIKE '%.avi' OR LOWER(relpath) LIKE '%.mov' OR LOWER(relpath) LIKE '%.webm' OR LOWER(relpath) LIKE '%.flv' OR LOWER(relpath) LIKE '%.m4v')"
+            photo_cond = "(LOWER(COALESCE(mime, '')) LIKE 'image/%' OR LOWER(relpath) LIKE '%.jpg' OR LOWER(relpath) LIKE '%.jpeg' OR LOWER(relpath) LIKE '%.png' OR LOWER(relpath) LIKE '%.webp' OR LOWER(relpath) LIKE '%.gif' OR LOWER(relpath) LIKE '%.bmp' OR LOWER(relpath) LIKE '%.svg')"
+            audio_cond = "(LOWER(COALESCE(mime, '')) LIKE 'audio/%' OR LOWER(relpath) LIKE '%.mp3' OR LOWER(relpath) LIKE '%.m4a' OR LOWER(relpath) LIKE '%.ogg' OR LOWER(relpath) LIKE '%.flac' OR LOWER(relpath) LIKE '%.wav' OR LOWER(relpath) LIKE '%.opus')"
+            if k_lower == "video":
+                where_clauses.append(video_cond)
+            elif k_lower in ("photo", "image"):
+                where_clauses.append(photo_cond)
+            elif k_lower == "audio":
+                where_clauses.append(audio_cond)
+            elif k_lower in ("document", "doc"):
+                where_clauses.append(f"(NOT ({video_cond} OR {photo_cond} OR {audio_cond}))")
+
+        where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
         cur = conn.cursor()
-        total = cur.execute("SELECT count(*) FROM downloads").fetchone()[0]
+        total = cur.execute(f"SELECT count(*) FROM downloads{where_sql}").fetchone()[0]
         rows = cur.execute(
-            f"SELECT chat_id, msg_id, sha256, size, relpath, created_at, {date_utc_expr}, {mime_expr}, {snippet_expr} FROM downloads ORDER BY rowid DESC LIMIT ? OFFSET ?",
+            f"SELECT chat_id, msg_id, sha256, size, relpath, created_at, {date_utc_expr}, {mime_expr}, {snippet_expr} FROM downloads{where_sql} ORDER BY rowid DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
 
@@ -94,9 +121,8 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
             relpath = r["relpath"]
             filename = Path(relpath).name
             k = classify_mime(r["mime"], relpath)
-            if kind and kind != "all" and k != kind:
-                continue
-            exists = (out_dir / relpath).exists()
+            target = (out_dir / relpath).resolve()
+            exists = target.is_relative_to(out_dir) and target.exists()
             items.append({
                 "chat_id": r["chat_id"],
                 "msg_id": r["msg_id"],
@@ -154,7 +180,35 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
 
     file_size = target_file.stat().st_size
     range_header = request.headers.get("range")
-    start, end = parse_range_header(range_header, file_size)
+    parsed_range = parse_range_header(range_header, file_size)
+
+    disposition_type = "attachment" if request.query_params.get("download") == "1" else "inline"
+    filename = Path(row["relpath"]).name
+    ascii_filename = filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip() or "file"
+    encoded_filename = quote(filename, safe="")
+
+    common_headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Type": row["mime"] or "application/octet-stream",
+        "Content-Disposition": f'{disposition_type}; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'; media-src 'self'; img-src 'self'",
+    }
+
+    if file_size == 0:
+        common_headers["Content-Length"] = "0"
+        return StreamingResponse(iter([]), status_code=200, headers=common_headers)
+
+    if not range_header or parsed_range is None:
+        def iter_full():
+            with open(target_file, "rb") as f:
+                while chunk := f.read(1024 * 1024):
+                    yield chunk
+
+        common_headers["Content-Length"] = str(file_size)
+        return StreamingResponse(iter_full(), status_code=200, headers=common_headers)
+
+    start, end = parsed_range
     chunk_size = end - start + 1
 
     def iterfile():
@@ -168,19 +222,9 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
                 remaining -= len(chunk)
                 yield chunk
 
-    disposition_type = "attachment" if request.query_params.get("download") == "1" else "inline"
-    filename = Path(row["relpath"]).name
-    ascii_filename = filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip() or "file"
-    encoded_filename = quote(filename, safe="")
-
-    headers = {
-        "Content-Range": f"bytes {start}-{end}/{file_size}",
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(chunk_size),
-        "Content-Type": row["mime"] or "application/octet-stream",
-        "Content-Disposition": f'{disposition_type}; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
-    }
-    return StreamingResponse(iterfile(), status_code=206, headers=headers)
+    common_headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+    common_headers["Content-Length"] = str(chunk_size)
+    return StreamingResponse(iterfile(), status_code=206, headers=common_headers)
 
 
 @router.get("/api/system/storage")

@@ -1,21 +1,32 @@
 """T5 CLI: build_parser 0o600 load_config->get_client->resolve_target->download_chat."""
-import argparse, asyncio, logging, os, sys
+import argparse, asyncio, logging, os, re, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError, PeerFloodError
-try:
-    from .config import ensure_out_dir, load_config
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .auth import ensure_session_file
+    from .config import ConfigError, ensure_out_dir, load_config
     from .resolver import ResolveError, resolve_target
     from .store import init_db
     from .downloader import DownloadOpts, download_chat
     from .dialogs import fetch_dialog_rows, format_dialog_table
-except ImportError:
-    from config import ensure_out_dir, load_config
-    from resolver import ResolveError, resolve_target
-    from store import init_db
-    from downloader import DownloadOpts, download_chat
-    from dialogs import fetch_dialog_rows, format_dialog_table
+else:
+    try:
+        from .auth import ensure_session_file
+        from .config import ConfigError, ensure_out_dir, load_config
+        from .resolver import ResolveError, resolve_target
+        from .store import init_db
+        from .downloader import DownloadOpts, download_chat
+        from .dialogs import fetch_dialog_rows, format_dialog_table
+    except ImportError:
+        from auth import ensure_session_file
+        from config import ConfigError, ensure_out_dir, load_config
+        from resolver import ResolveError, resolve_target
+        from store import init_db
+        from downloader import DownloadOpts, download_chat
+        from dialogs import fetch_dialog_rows, format_dialog_table
 log = logging.getLogger(__name__)
 def _chmod600_tree(out):
     r = Path(out); r.mkdir(parents=True, exist_ok=True)
@@ -26,36 +37,74 @@ def _chmod600_tree(out):
     except OSError: pass
     return r
 def get_client(cfg):
-    try: from .auth import ensure_session_file
-    except ImportError: from auth import ensure_session_file
     ensure_session_file(cfg.session_path)
     return TelegramClient(str(cfg.session_path), int(cfg.api_id), str(cfg.api_hash))
+class TgDlArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write(f"{self.prog}: error: {message}\n")
+        sys.exit(1)
+
+def parse_bytes(val: str | int | float | None) -> int | None:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        if val < 0:
+            raise ValueError("Size cannot be negative")
+        return int(val)
+    s = str(val).strip()
+    if not s:
+        return None
+    units = {
+        "B": 1, "K": 1024, "KB": 1024,
+        "M": 1024**2, "MB": 1024**2,
+        "G": 1024**3, "GB": 1024**3,
+        "T": 1024**4, "TB": 1024**4,
+    }
+    m = re.fullmatch(r"([+-]?\d+(?:\.\d+)?)\s*([A-Za-z]*)", s)
+    if not m:
+        raise ValueError(f"Invalid size format: {val!r}")
+    num_str, unit_str = m.group(1), m.group(2).upper()
+    num = float(num_str)
+    if num < 0:
+        raise ValueError("Size cannot be negative")
+    if not unit_str:
+        return int(num)
+    if unit_str not in units:
+        raise ValueError(f"Invalid size unit: {unit_str!r} in {val!r}")
+    return int(num * units[unit_str])
+
 def build_parser():
-    p = argparse.ArgumentParser(prog="tg-dl", description="Telegram downloader target chat media")
+    p = TgDlArgumentParser(prog="tg-dl", description="Telegram downloader target chat media")
     p.add_argument("--target", required=False, default=None, help="target chat @user t.me link id phone"); p.add_argument("--out", default="out", help="output dir")
-    p.add_argument("--limit", type=int, default=500, help="message limit (0 for unlimited)"); p.add_argument("--no-limit", action="store_true", default=False, help="download all messages without limit"); p.add_argument("--filter", default=None, help="media type filter")
-    p.add_argument("--after", default=None, help="after date ISO-8601 (UTC normalized)"); p.add_argument("--before", default=None, help="before date ISO-8601 (UTC normalized)")
+    p.add_argument("--limit", type=int, default=500, help="message limit (0 for unlimited)"); p.add_argument("--no-limit", action="store_true", default=False, help="download all messages without limit")
+    p.add_argument("--filter", "--media-type", "--kind", dest="filter", default=None, help="media type filter")
+    p.add_argument("--after", "--min-date", dest="after", default=None, help="after date ISO-8601 (UTC normalized)"); p.add_argument("--before", "--max-date", dest="before", default=None, help="before date ISO-8601 (UTC normalized)")
     p.add_argument("--from-user", default=None, help="sender filter"); p.add_argument("--search", default=None, help="search text")
     p.add_argument("--ids", default=None, help="comma ids"); p.add_argument("--max-bytes", type=int, default=None); p.add_argument("--timeout", type=float, default=None)
     p.add_argument("--dry-run", action="store_true", help="no bytes"); p.add_argument("--resume", action="store_true", help="keep .part; full restart resume, no false offset")
-    p.add_argument("--min-id", type=int, default=None, help="skip messages with id <= min-id"); p.add_argument("--sync", action="store_true", default=False, help="persist max msg id per chat; next run resumes from checkpoint")
+    p.add_argument("--min-id", type=int, default=None, help="skip messages with id <= min-id")
+    p.add_argument("--max-id", type=int, default=None, help="skip messages with id >= max-id")
+    p.add_argument("--min-size", type=str, default=None, help="min file size (e.g. 10MB, 500KB)")
+    p.add_argument("--max-size", type=str, default=None, help="max file size (e.g. 1GB, 2TB)")
+    p.add_argument("--pattern", type=str, default=None, help="glob filename pattern (e.g. *.mp4)")
+    p.add_argument("--sync", action="store_true", default=False, help="persist max msg id per chat; next run resumes from checkpoint")
     p.add_argument("--join", action="store_true", default=False, help="join default false"); p.add_argument("--takeout", action="store_true", default=False, help="takeout opt-in")
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--list-dialogs", action="store_true", default=False, help="list account dialogs")
     p.add_argument("--dialog-filter", choices=["all", "group", "channel", "dm"], default="all", help="dialog type filter")
     p.add_argument("--dialog-limit", type=int, default=100, help="max dialogs"); return p
 def main(argv=None) -> int:
-    a = build_parser().parse_args(argv)
+    parser = build_parser()
+    a = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO)
     try: cfg = load_config()
-    except SystemExit: return 1
-    except Exception: return 1
-    try:
-        from src.instance_lock import acquire_instance_lock
-        acquire_instance_lock(cfg.session_path)
-    except Exception:
-        pass
+    except (ConfigError, SystemExit, Exception): return 1
     if bool(getattr(a, "list_dialogs", False)):
+        try:
+            from src.instance_lock import acquire_instance_lock
+            acquire_instance_lock(cfg.session_path)
+        except Exception:
+            pass
         async def _list():
             c = get_client(cfg)
             async with c:
@@ -65,32 +114,52 @@ def main(argv=None) -> int:
         try: return asyncio.run(_list())
         except (FloodWaitError, PeerFloodError): return 3
         except (OSError, IOError): return 4
-        except SystemExit as e: return int(e.code) if str(getattr(e, "code", "")).isdigit() else 1
+        except SystemExit as e: return int(str(getattr(e, "code", 1))) if str(getattr(e, "code", "")).isdigit() else 1
         except Exception as e:
             if "auth" in str(type(e).__name__).lower() or "auth" in str(e).lower(): return 2
             return 1
     if not getattr(a, "target", None):
-        build_parser().error("--target is required unless --list-dialogs is given")
+        parser.error("--target is required unless --list-dialogs is given")
+    try:
+        from src.instance_lock import acquire_instance_lock
+        acquire_instance_lock(cfg.session_path)
+    except Exception:
+        pass
     if bool(getattr(a, "takeout", False)): cfg.takeout = True
     try: out = ensure_out_dir(a.out); _chmod600_tree(out)
     except (OSError, SystemExit): return 4
+    min_size = None
+    max_size = None
+    try:
+        min_size = parse_bytes(getattr(a, "min_size", None))
+        max_size = parse_bytes(getattr(a, "max_size", None))
+    except ValueError as ve:
+        parser.error(str(ve))
+    if min_size is not None and max_size is not None and min_size > max_size:
+        parser.error(f"--min-size ({min_size}) cannot exceed --max-size ({max_size})")
+    if a.min_id is not None and a.max_id is not None and a.min_id >= a.max_id:
+        parser.error(f"--min-id ({a.min_id}) must be less than --max-id ({a.max_id})")
     ids = [int(x) for x in str(a.ids).split(",") if x.strip().isdigit()] if a.ids else None
     raw_lim = 0 if getattr(a, "no_limit", False) else getattr(a, "limit", 500)
     eff_lim = None if (raw_lim is None or int(raw_lim) <= 0) else int(raw_lim)
-    opts = DownloadOpts(limit=eff_lim, max_bytes=a.max_bytes, timeout_s=a.timeout, filter=a.filter, after=a.after, before=a.before, from_user=getattr(a, "from_user", None), search=a.search, ids=ids, dry_run=bool(a.dry_run), resume=bool(a.resume), takeout=bool(getattr(a, "takeout", False) or getattr(cfg, "takeout", False)), min_id=getattr(a, "min_id", None), sync=bool(getattr(a, "sync", False)))
+    opts = DownloadOpts(limit=eff_lim, max_bytes=a.max_bytes, timeout_s=a.timeout, filter=a.filter, after=a.after, before=a.before, from_user=getattr(a, "from_user", None), search=a.search, ids=ids, dry_run=bool(a.dry_run), resume=bool(a.resume), takeout=bool(getattr(a, "takeout", False) or getattr(cfg, "takeout", False)), min_id=getattr(a, "min_id", None), max_id=getattr(a, "max_id", None), min_size=min_size, max_size=max_size, pattern=getattr(a, "pattern", None), sync=bool(getattr(a, "sync", False)))
     async def _run():
         c = get_client(cfg)
         async with c:
             try: t = await resolve_target(c, str(a.target), join=bool(a.join))
             except ResolveError as e: return 5 if getattr(e, "code", "") == "EXIT5" else 5
             db = init_db(Path(out) / "manifest.db")
-            try: return await download_chat(c, t, opts, out, db)
-            except (FloodWaitError, PeerFloodError): return 3
+            try:
+                return await download_chat(c, t, opts, out, db)
+            except (FloodWaitError, PeerFloodError):
+                return 3
+            finally:
+                db.close()
         return 0
     try: r = asyncio.run(_run())
     except (FloodWaitError, PeerFloodError): return 3
     except (OSError, IOError): return 4
-    except SystemExit as e: return int(e.code) if str(getattr(e, "code", "")).isdigit() else 1
+    except SystemExit as e: return int(str(getattr(e, "code", 1))) if str(getattr(e, "code", "")).isdigit() else 1
     except Exception as e:
         if "auth" in str(type(e).__name__).lower() or "auth" in str(e).lower(): return 2
         return 1

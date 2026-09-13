@@ -5,19 +5,30 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
 from src.cli import get_client
 from src.config import Config, load_config, scrub_for_log
 from src.web.job_manager import JobManager
 from src.web.routes_jobs import router as jobs_router
 from src.web.routes_media import router as media_router
 from src.web.routes_tg import router as tg_router
-from src.web.security import mask_phone, verify_origin, verify_token
+from src.web.security import (
+    generate_ephemeral_token,
+    get_ephemeral_token,
+    mask_phone,
+    verify_origin,
+    verify_token,
+)
 
 def create_app(cfg: Config | None = None) -> FastAPI:
+    if get_ephemeral_token() is None:
+        generate_ephemeral_token()
+
     if cfg is None:
         try:
             cfg = load_config()
-        except Exception:
+        except (Exception, SystemExit):
             cfg = None
 
     static_dir = Path(__file__).parent / "static"
@@ -39,6 +50,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 pass
 
     app = FastAPI(title="TeleVault Web Dashboard", lifespan=lifespan)
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
+    )
     app.state.job_manager = JobManager()
     app.state.out_dir = "out"
     app.state.config = cfg

@@ -87,3 +87,10 @@ def test_user_entity_bypasses_participant_check():
     assert r.kind == "username"
     assert not any("JoinChannelRequest" in str(call) for call in c.mock_calls)
     assert not any("GetParticipantRequest" in str(call) for call in c.mock_calls)
+
+
+def test_parse_target_public_message_and_forum_links():
+    assert parse_target("https://t.me/durov/123") == {"kind": "username", "value": "durov"}
+    assert parse_target("t.me/durov/") == {"kind": "username", "value": "durov"}
+    assert parse_target("https://t.me/s/durov") == {"kind": "username", "value": "durov"}
+    assert parse_target("t.me/channel/100/200") == {"kind": "username", "value": "channel"}

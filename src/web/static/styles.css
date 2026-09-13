@@ -3,9 +3,11 @@
   --bg-surface: #121824;
   --bg-surface-glass: rgba(18, 24, 38, 0.78);
   --border-glass: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.08);
   --border-focus: rgba(0, 229, 255, 0.45);
   --accent-cyan: #00E5FF;
   --accent-cyan-glow: rgba(0, 229, 255, 0.25);
+  --cyan-glow: var(--accent-cyan-glow);
   --accent-purple: #A855F7;
   --accent-emerald: #10B981;
   --accent-crimson: #EF4444;
@@ -20,6 +22,11 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 body {
@@ -95,6 +102,10 @@ header {
   border: 1px solid var(--border-glass);
   border-radius: 9999px;
   font-size: 0.85rem;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: all 0.2s;
 }
 
@@ -191,6 +202,7 @@ header {
 /* Tab Navigation */
 .tab-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1.1rem;
   border-bottom: 1px solid var(--border-glass);
@@ -206,7 +218,7 @@ header {
   font-weight: 500;
   cursor: pointer;
   padding: 0.45rem 0.85rem;
-  min-height: 38px;
+  min-height: 44px;
   border-radius: 8px;
   transition: all 0.2s;
   display: inline-flex;
@@ -233,7 +245,19 @@ header {
   margin-bottom: 0.4rem;
 }
 
-input[type="text"], input[type="password"], input[type="search"], input[type="number"], select {
+.label-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  min-height: 1.25rem;
+}
+
+.gauge-num, .pill, .telemetry-grid, .telemetry-label, .hud-stat, .stat-value {
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="text"], input[type="tel"], input[type="password"], input[type="search"], input[type="number"], select {
   width: 100%;
   padding: 0.65rem 0.95rem;
   background: rgba(0, 0, 0, 0.35);
@@ -291,7 +315,7 @@ input:focus, select:focus {
 }
 
 .btn-crimson:hover {
-  background: var(--accent-crimson);
+  background: #DC2626;
   color: #fff;
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
   transform: translateY(-1px);
@@ -328,11 +352,25 @@ input:focus, select:focus {
   user-select: none;
   font-size: 0.8rem;
   color: var(--text-main);
-  min-height: 36px;
+  min-height: 44px;
+  position: relative;
 }
 
 .toggle-switch input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 .toggle-slider {
@@ -416,7 +454,7 @@ input:focus, select:focus {
 
 .badge-group {
   background: rgba(168, 85, 247, 0.12);
-  color: #A855F7;
+  color: #C084FC;
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
@@ -521,6 +559,13 @@ input:focus, select:focus {
   border-color: rgba(0, 229, 255, 0.35);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(0, 229, 255, 0.08);
+}
+
+.media-card:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
 }
 
 .card-action-bar {
@@ -633,6 +678,11 @@ input:focus, select:focus {
 .toast.toast-error { border-left-color: var(--accent-crimson); }
 .toast.toast-warning { border-left-color: var(--accent-amber); }
 .toast.toast-info { border-left-color: var(--accent-cyan); }
+.toast.fade-out {
+  opacity: 0;
+  transform: translateY(10px) scale(0.96);
+  pointer-events: none;
+}
 
 .toast-icon {
   flex-shrink: 0;
@@ -702,6 +752,8 @@ input:focus, select:focus {
   border-radius: 16px;
   width: 100%;
   max-width: 480px;
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
   padding: 1.6rem;
   position: relative;
   animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -733,9 +785,9 @@ input:focus, select:focus {
   cursor: pointer;
   line-height: 1;
   padding: 4px;
-  min-height: 36px;
-  min-width: 36px;
-  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
@@ -744,9 +796,15 @@ input:focus, select:focus {
   color: var(--text-main);
 }
 
+.chat-arm-btn {
+  min-height: 44px;
+  min-width: 72px;
+  padding: 0.5rem 1rem;
+}
+
 .eye-toggle-btn {
   position: absolute;
-  right: 10px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -754,8 +812,8 @@ input:focus, select:focus {
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
-  min-height: 36px;
-  min-width: 36px;
+  min-height: 44px;
+  min-width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -879,11 +937,159 @@ input:focus, select:focus {
 @keyframes scaleUp { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 
 .progress-indeterminate {
-  background: linear-gradient(90deg, #00E5FF, #8A2BE2, #00E5FF) !important;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple), var(--accent-cyan)) !important;
   background-size: 200% 100% !important;
   animation: progress-shimmer 2s infinite linear !important;
 }
 @keyframes progress-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Modern Responsive Grids & Layouts */
+.form-row-2-1 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 640px) {
+  .form-row-2-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-row-1-1 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 640px) {
+  .form-row-1-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .telemetry-grid {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+}
+
+/* Collapsible Advanced Filters */
+.advanced-filters-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-glass);
+  border-radius: 9px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Gallery Toolbar & Pagination */
+.gallery-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.gallery-kind-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.gallery-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+}
+
+/* Lightbox Prev/Next Chevrons */
+.lightbox-card {
+  position: relative;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(18, 24, 38, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-glass);
+  color: var(--text-main);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.2s;
+}
+
+.lightbox-nav-btn:hover {
+  background: var(--accent-cyan);
+  color: #0B0E14;
+  border-color: var(--accent-cyan);
+}
+
+.lightbox-nav-prev {
+  left: 0.75rem;
+}
+
+.lightbox-nav-next {
+  right: 0.75rem;
+}
+
+/* Vestibular Safety & Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .spinner-rotate {
+    animation: none !important;
+  }
+}
+
+/* Responsive Mobile Header */
+@media (max-width: 480px) {
+  .header-status {
+    gap: 0.5rem;
+  }
+  #userPill {
+    max-width: 120px;
+  }
+}
+
+/* Spinner Rotate Animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner-rotate {
+  animation: spin 1s linear infinite;
+  transform-origin: center center;
 }

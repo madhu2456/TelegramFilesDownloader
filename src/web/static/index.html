@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
   <meta name="referrer" content="no-referrer">
   <title>TeleVault | Modern Web Dashboard</title>
   <link rel="stylesheet" href="/static/styles.css">
@@ -34,25 +35,25 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Account Access
         </h2>
-        <div class="tab-row">
-          <button class="tab-btn active" id="tabBtnPhone" onclick="switchAuthTab('phone')">Phone SMS</button>
-          <button class="tab-btn" id="tabBtnQr" onclick="switchAuthTab('qr')">QR Login</button>
+        <div class="tab-row" role="tablist">
+          <button class="tab-btn active" id="tabBtnPhone" role="tab" aria-selected="true" onclick="switchAuthTab('phone')">Phone SMS</button>
+          <button class="tab-btn" id="tabBtnQr" role="tab" aria-selected="false" onclick="switchAuthTab('qr')">QR Login</button>
         </div>
-        <div id="phoneAuthTab">
+        <div id="phoneAuthTab" role="tabpanel" aria-labelledby="tabBtnPhone">
           <div class="input-group">
-            <label>Phone Number (E.164 format)</label>
-            <input type="text" id="phoneInput" placeholder="+15551234567">
+            <label for="phoneInput">Phone Number (E.164 format)</label>
+            <input type="tel" id="phoneInput" placeholder="+15551234567" autocomplete="tel">
           </div>
           <button class="btn btn-cyan" onclick="sendPhoneCode()" style="width:100%">Send Verification Code</button>
           <div id="codeSection" style="display:none; margin-top:1rem;">
             <div class="input-group">
-              <label>Telegram Code</label>
-              <input type="text" id="codeInput" placeholder="12345" onkeydown="if(event.key==='Enter') signInWithCode()">
+              <label for="codeInput">Telegram Code</label>
+              <input type="text" id="codeInput" placeholder="12345" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" onkeydown="if(event.key==='Enter') signInWithCode()">
             </div>
             <button class="btn btn-cyan" onclick="signInWithCode()" style="width:100%">Sign In</button>
           </div>
         </div>
-        <div id="qrAuthTab" style="display:none; text-align:center;">
+        <div id="qrAuthTab" role="tabpanel" aria-labelledby="tabBtnQr" style="display:none; text-align:center;">
           <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Scan with Telegram on your phone (Settings > Devices > Link Desktop Device)</p>
           <div id="qrContainer" style="padding:1rem; background:#fff; border-radius:10px; display:inline-block; min-width:180px; min-height:180px;"></div>
         </div>
@@ -65,13 +66,14 @@
           Chat Explorer
         </h2>
         <div class="input-group">
+          <label for="dialogSearch" class="visually-hidden" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;">Filter dialogs</label>
           <input type="search" id="dialogSearch" placeholder="Filter dialogs... [/ to search]" oninput="filterDialogs()">
         </div>
-        <div class="tab-row">
-          <button class="tab-btn active" id="filterAll" onclick="loadDialogs('all')">All</button>
-          <button class="tab-btn" id="filterChannel" onclick="loadDialogs('channel')">Channels</button>
-          <button class="tab-btn" id="filterGroup" onclick="loadDialogs('group')">Groups</button>
-          <button class="tab-btn" id="filterDm" onclick="loadDialogs('dm')">DMs</button>
+        <div class="tab-row" role="tablist">
+          <button class="tab-btn active" id="filterAll" role="tab" aria-selected="true" onclick="loadDialogs('all')">All</button>
+          <button class="tab-btn" id="filterChannel" role="tab" aria-selected="false" onclick="loadDialogs('channel')">Channels</button>
+          <button class="tab-btn" id="filterGroup" role="tab" aria-selected="false" onclick="loadDialogs('group')">Groups</button>
+          <button class="tab-btn" id="filterDm" role="tab" aria-selected="false" onclick="loadDialogs('dm')">DMs</button>
         </div>
         <div class="dialog-list" id="dialogList">Loading dialogs...</div>
       </div>
@@ -85,25 +87,25 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           Download Configuration
         </h2>
-        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:1rem;">
+        <div class="form-row-2-1">
           <div class="input-group">
-            <label>Target (@channel, t.me/link, ID, phone)</label>
+            <label for="targetInput">Target (@channel, t.me/link, ID, phone)</label>
             <input type="text" id="targetInput" placeholder="@my_channel or t.me/c/12345">
           </div>
           <div class="input-group">
-            <label style="display:flex; justify-content:space-between; align-items:center;">
-              <span>Message Limit</span>
+            <div class="label-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <label for="limitInput">Message Limit</label>
               <label class="toggle-switch-label" style="font-size:12px; font-weight:normal; display:flex; align-items:center; gap:6px; cursor:pointer;">
                 <input type="checkbox" id="noLimitToggle" onchange="toggleNoLimit(this.checked)">
                 <span style="color:var(--accent-cyan); font-weight:500;">No Limit (All)</span>
               </label>
-            </label>
+            </div>
             <input type="number" id="limitInput" value="100" min="1" placeholder="e.g. 100 or toggle No Limit">
           </div>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+        <div class="form-row-1-1">
           <div class="input-group">
-            <label>Media Filter</label>
+            <label for="filterSelect">Media Filter</label>
             <select id="filterSelect">
               <option value="">All Media</option>
               <option value="video">Video</option>
@@ -113,8 +115,27 @@
             </select>
           </div>
           <div class="input-group">
-            <label>Search Keyword</label>
+            <label for="searchInput">Search Keyword</label>
             <input type="text" id="searchInput" placeholder="Optional keyword filter...">
+          </div>
+        </div>
+
+        <!-- Collapsible Advanced Filters -->
+        <div style="margin-top:0.4rem;">
+          <button type="button" class="tab-btn" id="advFilterToggleBtn" onclick="toggleAdvancedFilters()" aria-expanded="false" aria-controls="advFiltersPanel" style="font-size:0.75rem; padding:0.25rem 0.6rem;">⚙️ Advanced Filters</button>
+        </div>
+        <div id="advFiltersPanel" class="advanced-filters-panel" style="display:none;">
+          <div class="input-group">
+            <label for="afterInput">After (ISO/UTC)</label>
+            <input type="text" id="afterInput" placeholder="2024-01-01">
+          </div>
+          <div class="input-group">
+            <label for="beforeInput">Before (ISO/UTC)</label>
+            <input type="text" id="beforeInput" placeholder="2025-01-01">
+          </div>
+          <div class="input-group">
+            <label for="fromUserInput">From User</label>
+            <input type="text" id="fromUserInput" placeholder="@username or ID">
           </div>
         </div>
 
@@ -147,12 +168,12 @@
           </label>
         </div>
 
-        <div style="display:flex; gap:1rem; margin-top:0.75rem;">
+        <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.75rem;">
           <button class="btn btn-cyan" onclick="startDownload()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Start Download
           </button>
-          <button class="btn btn-crimson" onclick="cancelDownload()">
+          <button class="btn btn-crimson" id="cancelJobBtn" onclick="cancelDownload()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             Cancel Active Job
           </button>
@@ -165,7 +186,7 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Live Telemetry HUD
         </h2>
-        <div style="display:grid; grid-template-columns: 160px 1fr; gap:1.5rem; align-items:center;">
+        <div class="telemetry-grid">
           <div class="gauge-container" style="position:relative;">
             <svg class="gauge-svg" viewBox="0 0 140 140">
               <circle class="gauge-bg" cx="70" cy="70" r="60"></circle>
@@ -189,6 +210,10 @@
               <span id="jobSkippedText">Skipped: 0</span>
               <span id="jobBytesText">0.0 MB</span>
             </div>
+            <div style="display:flex; justify-content:space-between; margin-top:0.4rem; font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); border-top:1px solid var(--border-glass); padding-top:0.4rem;">
+              <span id="jobCurrentFile" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:65%;">File: --</span>
+              <span id="jobEtaText">ETA: --</span>
+            </div>
           </div>
         </div>
         <div class="terminal-window" id="terminalLogs" style="margin-top:1.25rem;">Waiting for events...</div>
@@ -196,15 +221,26 @@
 
       <!-- Module 5: Media Gallery -->
       <div class="glass-card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <div class="gallery-toolbar">
           <h2 style="margin:0;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             Downloaded Media Gallery
           </h2>
-          <button class="tab-btn" onclick="loadMedia()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
+          <div class="gallery-kind-tabs" role="tablist">
+            <button class="tab-btn active" id="mediaTabAll" role="tab" aria-selected="true" onclick="setMediaKindFilter('')">All</button>
+            <button class="tab-btn" id="mediaTabVideo" role="tab" aria-selected="false" onclick="setMediaKindFilter('video')">Video</button>
+            <button class="tab-btn" id="mediaTabPhoto" role="tab" aria-selected="false" onclick="setMediaKindFilter('photo')">Photo</button>
+            <button class="tab-btn" id="mediaTabAudio" role="tab" aria-selected="false" onclick="setMediaKindFilter('audio')">Audio</button>
+            <button class="tab-btn" id="mediaTabDoc" role="tab" aria-selected="false" onclick="setMediaKindFilter('document')">Docs</button>
+          </div>
+          <div class="gallery-pagination">
+            <button class="tab-btn" id="mediaPrevBtn" onclick="changeMediaPage(-1)" disabled>&larr; Prev</button>
+            <span id="mediaPageIndicator">Page 1 / 1</span>
+            <button class="tab-btn" id="mediaNextBtn" onclick="changeMediaPage(1)" disabled>Next &rarr;</button>
+            <button class="tab-btn" onclick="loadMedia()" title="Refresh" aria-label="Refresh media gallery">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
         </div>
         <div class="gallery-grid" id="mediaGrid">No media downloaded yet.</div>
       </div>
@@ -212,25 +248,25 @@
   </main>
 
   <!-- 2FA Cloud Password Modal -->
-  <div id="twoFactorModal" class="modal-backdrop" style="display:none;">
+  <div id="twoFactorModal" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="twoFactorModalTitle">
     <div class="modal-card">
       <div class="modal-header">
         <div style="display:flex; align-items:center; gap:0.6rem;">
           <div class="modal-icon-badge">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           </div>
-          <h3 style="margin:0; font-size:1.1rem;">Two-Step Verification</h3>
+          <h3 id="twoFactorModalTitle" style="margin:0; font-size:1.1rem;">Two-Step Verification</h3>
         </div>
-        <button class="modal-close" onclick="closeTwoFactorModal()">&times;</button>
+        <button class="modal-close" onclick="closeTwoFactorModal()" aria-label="Close dialog">&times;</button>
       </div>
       <p style="color:var(--text-muted); font-size:0.85rem; margin:1rem 0 1.25rem;">
         Your Telegram account requires an additional cloud password to authenticate.
       </p>
       <div class="input-group">
-        <label>Cloud Password</label>
+        <label for="twoFactorInput">Cloud Password</label>
         <div style="position:relative;">
           <input type="password" id="twoFactorInput" placeholder="Enter your 2FA password" onkeydown="if(event.key==='Enter') submitTwoFactorPassword()">
-          <button type="button" class="eye-toggle-btn" onclick="togglePasswordVisibility('twoFactorInput', this)" title="Show/Hide Password">
+          <button type="button" class="eye-toggle-btn" onclick="togglePasswordVisibility('twoFactorInput', this)" title="Show/Hide Password" aria-label="Show or hide password">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
@@ -243,14 +279,16 @@
   </div>
 
   <!-- Theater Lightbox Modal -->
-  <div id="mediaLightboxModal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this) closeMediaLightbox()">
+  <div id="mediaLightboxModal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this) closeMediaLightbox()" role="dialog" aria-modal="true" aria-labelledby="lightboxTitle">
     <div class="modal-card lightbox-card">
+      <button class="lightbox-nav-btn lightbox-nav-prev" id="lightboxPrevBtn" onclick="prevMediaLightbox()" aria-label="Previous item">&#8249;</button>
+      <button class="lightbox-nav-btn lightbox-nav-next" id="lightboxNextBtn" onclick="nextMediaLightbox()" aria-label="Next item">&#8250;</button>
       <div class="modal-header">
         <div style="display:flex; align-items:center; gap:0.6rem; overflow:hidden;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
           <span id="lightboxTitle" style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Media Preview</span>
         </div>
-        <button class="modal-close" onclick="closeMediaLightbox()">&times;</button>
+        <button class="modal-close" onclick="closeMediaLightbox()" aria-label="Close dialog">&times;</button>
       </div>
       <div class="lightbox-body">
         <div id="lightboxMediaContainer" class="lightbox-media-container"></div>
@@ -261,7 +299,7 @@
           <div class="meta-row"><span class="meta-k">SHA-256</span>
             <div style="display:flex; align-items:center; gap:0.4rem; max-width:65%;">
               <span class="meta-v hash-text" id="lightboxSha" style="overflow:hidden; text-overflow:ellipsis;">--</span>
-              <button class="copy-btn" id="lightboxCopyBtn" onclick="copyHashFromLightbox()" title="Copy SHA256">
+              <button class="copy-btn" id="lightboxCopyBtn" onclick="copyHashFromLightbox()" title="Copy SHA256" aria-label="Copy SHA256 hash">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
             </div>

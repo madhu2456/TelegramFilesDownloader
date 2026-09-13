@@ -1,14 +1,21 @@
 """Ephemeral token generation, verification, origin validation, and PII masking."""
 import hmac
+import os
 import secrets
 from urllib.parse import urlparse
 
 _ACTIVE_TOKEN: str | None = None
 
 def generate_ephemeral_token() -> str:
-    """Generate and store a new cryptographically secure 32-byte URL-safe token."""
+    """Generate and store a new cryptographically secure 32-byte URL-safe token.
+    If TELEVAULT_TOKEN environment variable is set, uses that instead.
+    """
     global _ACTIVE_TOKEN
-    _ACTIVE_TOKEN = secrets.token_urlsafe(32)
+    env_token = os.getenv("TELEVAULT_TOKEN")
+    if env_token:
+        _ACTIVE_TOKEN = env_token.strip()
+    else:
+        _ACTIVE_TOKEN = secrets.token_urlsafe(32)
     return _ACTIVE_TOKEN
 
 def get_ephemeral_token() -> str | None:

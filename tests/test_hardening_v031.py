@@ -11,7 +11,7 @@ Covers 14+/9- diff in src/downloader.py + src/store.py:
 import asyncio
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch

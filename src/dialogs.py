@@ -15,7 +15,7 @@ def safe_handle(entity: Any) -> str:
     u = getattr(entity, "username", None)
     if isinstance(u, str) and u.strip():
         s = u.strip().lstrip("@")
-        if 5 <= len(s) <= 32 and s.replace("_", "").isalnum():
+        if 4 <= len(s) <= 32 and s.replace("_", "").isalnum():
             return "@" + s
     return ""
 def safe_name(dialog: Any, entity: Any) -> str:

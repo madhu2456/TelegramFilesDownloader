@@ -8,3 +8,17 @@ version = "0.3.1"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["E701", "E702", "E401"]
+
+[tool.mypy]
+ignore_missing_imports = true

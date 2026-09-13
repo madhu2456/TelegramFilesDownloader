@@ -7,3 +7,4 @@ ruff==0.9.9
 mypy==1.15.0
 fastapi>=0.110.0
 uvicorn>=0.28.0
+qrcode>=7.4.2

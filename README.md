@@ -4,32 +4,48 @@
 
 > Hardened Telethon-based Telegram media downloader with safe defaults, resume, audit manifest, and the **TeleVault Modern Web Dashboard**.
 
-See `docs/USAGE.md` for full flags, safety limits, web API reference, and troubleshooting.
+See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API reference, and troubleshooting.
 
 ## Features
 
-### TeleVault Modern Web Dashboard
+### TeleVault Web Dashboard
 - **Zero-Build Architecture**: FastAPI backend + Vanilla HTML5/CSS3/ES6 Dark Obsidian Glassmorphism UI — zero Node.js/npm dependencies required.
-- **Interactive Telegram Auth Wizard**: QR login and phone SMS login flows with seamless 2FA cloud password support.
-- **Real-Time WebSocket Telemetry HUD**: Live animated SVG speed gauge (MB/s), visual progress bar with indeterminate streaming shimmer for uncapped downloads, and monospace streaming terminal (`/ws/live`).
-- **Interactive Chat Explorer**: Browse and search account dialogs (channels, groups, DMs) with 1-click target arming.
-- **Advanced Download Configuration Panel**: Controls for media filters, date ranges, takeout, sync, dry-run, and a dedicated **"No Limit (All)" switch** for full chat history archiving.
-- **Paginated Media Gallery & Streamer**: RFC 7233 HTTP 206 byte-range seeking for smooth video playback, audio listening, and photo previews.
-- **System Storage Health Monitor**: Real-time disk capacity telemetry via `statvfs` with low-space alerts.
-- **Decoupled JobManager Resilience**: Background execution decoupled from browser sessions; downloads survive page refreshes and network blips with singleton execution mutex protection.
+- **Pure-Python In-Memory SVG QR Code Engine**: Built-in SVG QR code generation (`qrcode.image.svg.SvgPathImage`) without PIL/Pillow or C-extension image dependencies, guaranteeing pure in-memory rendering and zero external HTTP telemetry or third-party exfiltration of session credentials.
+- **WCAG 2.2 AA Obsidian Dark Glassmorphism Design System**: Desktop-first UI featuring an `#0B0E14` Obsidian canvas with frosted glass panels and high-contrast glowing accents:
+  - **High-Contrast Typography**: Rigorously validated to meet or exceed WCAG 2.2 AA contrast ratios (`>= 4.5:1`) across all text labels, metrics, and interactive controls.
+  - **Visible Focus Rings**: Prominent 2px cyan (`--accent-cyan`) `:focus-visible` outline with 2px offset on buttons, inputs, links, and media cards.
+  - **Touch & Click Target Compliance**: Minimum 44x44px target sizes on interactive action buttons, pagination controls, toggle switches, and lightbox navigation triggers.
+  - **Modal Keyboard Focus Traps**: Accessible focus trapping (Tab / Shift+Tab looping) preventing focus escape during 2FA cloud password authentication and Theater Lightbox inspection.
+  - **Keyboard Navigation**: Complete keyboard support with Enter/Space card triggers, quick dialog search jump (`/`), modal dismissal (`Escape`), and media browsing (`ArrowLeft`/`ArrowRight`).
+- **Real-Time WebSocket Telemetry HUD (`/ws/live`)**:
+  - **Animated SVG Speedometer Arc Gauge**: Dynamic SVG speed arc with real-time dashoffset calculations calibrated up to 25 MB/s.
+  - **Live Transfer Rate & Multi-Hour ETA**: Real-time download throughput in MB/s with intelligent multi-hour ETA calculation (`Xh Ym Zs`).
+  - **Active File Indicator**: Live display of currently downloading file name with a full relative path tooltip on hover.
+  - **Circular 500-Line Terminal with Reconnect Replay**: High-throughput monospace streaming log window maintaining a sliding 500-line circular buffer, automatic bottom-pinning scroll lock, and instant state & log replay on WebSocket reconnect.
+  - **Visual Progress & Streaming Shimmer**: Indeterminate animated gradient shimmer for uncapped chat streams and determinate percentage progress bars for bounded runs.
+- **Paginated Media Gallery & Theater Lightbox**:
+  - **SQLite SQL-Pushdown Kind Filtering**: Instant filtering across media kinds (`Video`, `Photo`, `Audio`, `Document`) pushed directly down to SQLite queries (`WHERE mime LIKE ... OR relpath LIKE ...`) with `LIMIT`/`OFFSET` pagination to avoid full-table scans.
+  - **Responsive Theater Lightbox**: Fullscreen immersive media viewer for inline video playback, audio listening, and high-resolution photo viewing with `ArrowLeft`/`ArrowRight` navigation, one-click SHA-256 clipboard copy, and direct RFC 7233 stream access.
+  - **Chat Explorer & Target Arming**: Searchable account dialog picker (channels, groups, DMs) with 1-click target arming into the download configuration panel.
+  - **System Storage Health Monitor**: Live disk capacity telemetry via `os.statvfs` with dynamic low-space warning alerts (<10% threshold).
+  - **Decoupled JobManager Resilience**: Background task architecture completely detached from browser sessions; downloads survive browser tab closures, page reloads, and network interruptions under singleton mutex protection.
 
-### Hardened Core Downloader
-- Download from public channels, private channels/groups (member-only), and DMs.
-- **Uncapped & Bounded Downloads**: Removal of the 500-message ceiling; support for `--no-limit` (or `--limit 0`) to archive complete chat histories.
-- 7 target forms: `@user`, `t.me/user` (supports 4–32 char handles including Fragment handles like `@news`, `t.me/auto`), phone `+...`, numeric id, `t.me/c/...`, `t.me/+...`, `t.me/joinchat/...`.
-- Dialog discovery: `--list-dialogs` with `--dialog-filter` and `--dialog-limit` to inspect account dialogs safely.
-- Filters: `--filter`, `--search`, `--from-user`, `--after` / `--before`, `--ids`, `--min-id`.
-- Incremental sync: `--sync` persists monotonic max message ID per chat to SQLite manifest for checkpointed resumes.
-- Content hash deduplication: SHA-256 deduplication links identical files as aliases in `messages.jsonl` without re-downloading bytes.
-- Robust partial downloads: `--dry-run` writes `messages.jsonl` only; `--resume` keeps `.part` files; `.part` is cleaned automatically on aliases and skips.
-- SQLite manifest `out/manifest.db` with `UNIQUE(chat_id, msg_id)` for resume-skip and auditability.
-- Flood & rate limit safety: serial requests, 1s + jitter, 300s cap, clean exit `3` on `FloodWaitError` (> 300s) or `PeerFloodError`.
-- No auto-join: invites need explicit `--join`; takeout needs explicit `--takeout`.
+### Hardened Core & Security
+- **Single-Instance Process Locking**: Session-scoped lockfile engine (`.{stem}.pid`) with `os.O_CLOEXEC`, non-blocking flock deadline loop (4.0s timeout), and phantom inode validation (`st_dev` and `st_ino` verification on both acquisition and unlinking to protect against stale descriptor unlinking). Features PID recycling checks via `/proc/{pid}/cmdline` and `ps`, zombie detection (`State: Z`), and clean SIGTERM-to-SIGKILL termination of obsolete instances.
+- **RFC 7233 Byte-Range Streaming & Media Sandbox**: On-demand HTTP 206 Partial Content streaming with chunked byte-range parsing, `Accept-Ranges: bytes`, and RFC 5987 UTF-8 encoded `Content-Disposition` headers, protected by defense-in-depth isolation:
+  - `Content-Security-Policy: sandbox; default-src 'none'; media-src 'self'; img-src 'self'`
+  - `X-Content-Type-Options: nosniff`
+  - Output directory containment strictly enforcing that media requests cannot traverse outside the configured output directory.
+- **Robust Telegram Resolver**:
+  - **4-Character Fragment Handle Support**: Extended regex `[A-Za-z0-9_]{4,32}` supporting 4-character auctioned Fragment handles (e.g. `@news`, `t.me/auto`).
+  - **Invite Links with `access_hash` Preservation**: Unpacks invite links (`t.me/+...`, `t.me/joinchat/...`) via `CheckChatInviteRequest` and `ImportChatInviteRequest`, maintaining full entity metadata and `access_hash` integrity without losing authorization.
+  - **Positive Channel ID Fallback**: Gracefully resolves positive channel IDs (e.g. `123456789`) by testing `-100{id}` channel prefix transforms and `PeerChannel` resolution.
+  - **7 Target Forms Supported**: Full support for `@user`, `t.me/user`, phone numbers (`+...`), numeric IDs, `t.me/c/...`, `t.me/+...`, and `t.me/joinchat/...`.
+  - **Membership Gate**: Verifies channel/group participation before download; strictly refuses silent auto-joining without explicit `--join`.
+- **Uncapped & Bounded Downloads**: Download without arbitrary message caps via `--no-limit` (or `--limit 0`), or bounded batching with safe defaults.
+- **Rate Limit & Flood Safety**: Serial requests with 1s + jitter delays, 300s FloodWait cap, and clean exit code `3` on `FloodWaitError` (> 300s) or `PeerFloodError`.
+- **SQLite Manifest Audit & Resumption**: Monotonic sync checkpoints (`--sync`, `--min-id`) in `out/manifest.db` with `UNIQUE(chat_id, msg_id)` and SHA-256 deduplication linking identical payloads as aliases.
+- **Filesystem Hardening**: Restrictive `chmod 600` on secrets/files, `0o700` directory trees, `umask 077`, atomic replaces with directory `fsync`, and automatic `.part` cleanup on aliases and skips.
 
 ## Quickstart
 
@@ -87,28 +103,39 @@ venv/bin/python -m src.cli --target @someuser123 --out out --limit 20
 | Dry-run, no bytes | `venv/bin/python -m src.cli --target @someuser123 --dry-run --limit 10 --out out` |
 | Resume bounded run | `venv/bin/python -m src.cli --target @someuser123 --resume --limit 100 --max-bytes 104857600 --out out` |
 
-Full flag matrix, exit codes (2 auth, 3 flood / peer flood, 4 disk/perm, 5 resolve), and limits: `docs/USAGE.md`.
+Full flag matrix, exit codes (2 auth, 3 flood / peer flood, 4 disk/perm, 5 resolve), and limits: [docs/USAGE.md](docs/USAGE.md).
 
 ## Project structure
 
 ```text
 src/
   __init__.py
-  auth.py       # session bootstrap
-  cli.py        # argparse entrypoint (tg-dl)
-  config.py     # .env loading, out-dir guards
-  dialogs.py    # account dialog table formatting
-  downloader.py # bounded fetch + write path
-  filesafe.py   # chmod 600/700, umask 077
-  resolver.py   # 7-form target parser + membership gate
-  store.py      # SQLite manifest + jsonl log + sync checkpoints
+  auth.py           # session bootstrap
+  cli.py            # argparse entrypoint (tg-dl)
+  config.py         # .env loading, out-dir guards
+  dialogs.py        # account dialog table formatting
+  downloader.py     # bounded/unlimited fetch + write path
+  filesafe.py       # chmod 600/700, umask 077, atomic fsync
+  instance_lock.py  # single-instance flock, O_CLOEXEC, phantom inode guards
+  resolver.py       # 7-form target parser, Fragment handles, invite resolver
+  store.py          # SQLite manifest + jsonl log + sync checkpoints
+  web/              # TeleVault web dashboard
+    app.py          # FastAPI application & lifespan
+    job_manager.py  # Decoupled download job runner & state machine
+    qr.py           # Pure-Python in-memory SVG QR code engine
+    routes_jobs.py  # Download job control & WebSocket /ws/live endpoint
+    routes_media.py # RFC 7233 byte-range streaming, gallery pagination, storage
+    routes_tg.py    # Telegram auth wizard & dialogs explorer
+    security.py     # Ephemeral session token & origin validation
+    static/         # Obsidian Glassmorphism UI (HTML5, CSS3, ES6)
 docs/
-  USAGE.md      # full CLI reference
-tests/
+  USAGE.md          # full CLI reference
+tests/              # Comprehensive test suite
 ```
 
 ## Version history
 
+- **TeleVault UI/UX Modernization & Security Hardening**: Pure-Python in-memory SVG QR engine (zero HTTP exfiltration); WCAG 2.2 AA Obsidian Dark Glassmorphism design system (>= 4.5:1 contrast, focus rings, 44x44px targets, focus traps, Enter/Space card triggers); real-time WebSocket telemetry HUD with animated SVG speedometer arc gauge, live transfer rate (MB/s), multi-hour ETA calculation, active file indicator with full path tooltip, and circular 500-line auto-scrolling terminal logs with reconnect replay; paginated media gallery with SQLite SQL-pushdown kind filtering and responsive Theater Lightbox; single-instance process locking with `O_CLOEXEC`, flock deadline, and phantom inode validation; RFC 7233 byte-range streaming with Content-Security-Policy sandbox and `X-Content-Type-Options: nosniff`; robust resolver with 4-char Fragment handles, invite link `access_hash` preservation, and positive channel ID fallback.
 - **Uncapped Downloads & No Limit Mode**: Removed 500-message ceiling across CLI and Web UI. Added `--no-limit` (and `--limit 0`) CLI flags for full chat history archiving, interactive "No Limit (All)" toggle switch in Web UI, and indeterminate streaming progress shimmer animation.
 - `v0.3.1` (hardening): Support 4-character Fragment handles (`@news`, `t.me/auto`); exit code 3 on `PeerFloodError` and `FloodWaitError` > 300s; monotonic sync checkpointing (only advances on verified downloads/skips); automatic `.part` cleanup on aliases and same-size skips; directory fsync on replace.
 - `v0.3.0`: Incremental sync with `--sync` and `--min-id`; SHA-256 content deduplication with alias records; UTC ISO-8601 timestamps (`Z` suffix); takeout wrapper support; rich metadata in `messages.jsonl`.
@@ -124,6 +151,10 @@ tests/
 
 ## Security
 
-- Never commit `.env` or `*.session*`; both are git-ignored.
-- Keep secrets private: `chmod 600 .env session/telegram.session`.
-- Use placeholders (`your_api_id_here`, `+15551234567`) in issues and examples.
+- **Single-Instance Protection**: Enforced session-scoped PID lockfile with `O_CLOEXEC` and phantom inode verification preventing concurrent session conflicts and database corruptions.
+- **Zero-Exfiltration QR Auth**: Pure-Python in-memory SVG QR code engine operating strictly locally without external HTTP calls or third-party telemetry.
+- **Media Streaming Sandbox**: Strict `Content-Security-Policy: sandbox; default-src 'none'; media-src 'self'; img-src 'self'` and `X-Content-Type-Options: nosniff` on all media streaming responses.
+- **Path Traversal Guards**: Strict resolution checks verifying that all served media paths remain contained within the configured output directory.
+- **Ephemeral Session Authentication**: Timing-attack resistant token validation (`secrets.compare_digest`) and strict WebSocket Origin header verification.
+- **Local Secret Isolation**: Never commit `.env` or `*.session*`; both are git-ignored. Keep secrets private: `chmod 600 .env session/telegram.session` and `umask 077`.
+- **Sanitized Issue Reporting**: Use placeholders (`your_api_id_here`, `+15551234567`) in issues and examples.

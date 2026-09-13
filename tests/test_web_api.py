@@ -1,9 +1,13 @@
 """Tests for TeleVault Web Dashboard (Core Engine, Security, JobManager, Media, and Static Assets)."""
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from starlette.websockets import WebSocketDisconnect
 import asyncio
 from pathlib import Path
 import sqlite3
 import pytest
+from telethon.errors import SessionPasswordNeededError
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -454,7 +458,6 @@ def test_dialogs_endpoint_client_uninitialized(tmp_path: Path):
 
 
 def test_dialogs_endpoint_normalization_dual_keys(tmp_path: Path, monkeypatch):
-    from unittest.mock import MagicMock
 
     cfg = Config(
         api_id=12345,
@@ -502,7 +505,6 @@ def test_dialogs_endpoint_normalization_dual_keys(tmp_path: Path, monkeypatch):
 
 
 def test_dialogs_endpoint_server_search_parity(tmp_path: Path, monkeypatch):
-    from unittest.mock import MagicMock
 
     cfg = Config(
         api_id=12345,
@@ -645,14 +647,299 @@ def test_stream_media_unicode_rfc5987_content_disposition(tmp_path: Path):
 
     # Inline streaming check
     resp = client.get(f"/api/media/stream/888/1?token={token}")
-    assert resp.status_code == 206
+    assert resp.status_code == 200
     cd = resp.headers.get("Content-Disposition", "")
     assert "inline;" in cd
     assert "filename*=UTF-8''" in cd
 
     # Attachment download check
     resp_dl = client.get(f"/api/media/stream/888/1?token={token}&download=1")
-    assert resp_dl.status_code == 206
+    assert resp_dl.status_code == 200
     assert "attachment;" in resp_dl.headers.get("Content-Disposition", "")
+
+
+def test_auth_me_scenarios(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    client = TestClient(app)
+    token = get_ephemeral_token()
+
+    # Case 1: tg_client is None
+    app.state.tg_client = None
+    r1 = client.get(f"/api/auth/me?token={token}")
+    assert r1.status_code == 200
+    assert r1.json() == {"authorized": False}
+
+    # Case 2: tg_client is not authorized
+    mock_client = AsyncMock()
+    mock_client.is_connected = MagicMock(return_value=True)
+    mock_client.is_user_authorized.return_value = False
+    app.state.tg_client = mock_client
+    r2 = client.get(f"/api/auth/me?token={token}")
+    assert r2.status_code == 200
+    assert r2.json() == {"authorized": False}
+
+    # Case 3: tg_client is authorized
+    mock_client.is_user_authorized.return_value = True
+    mock_me = SimpleNamespace(
+        id=777,
+        first_name="John",
+        last_name="Doe",
+        username="johndoe",
+        phone="+15559876543",
+    )
+    mock_client.get_me = AsyncMock(return_value=mock_me)
+    r3 = client.get(f"/api/auth/me?token={token}")
+    assert r3.status_code == 200
+    d3 = r3.json()
+    assert d3["authorized"] is True
+    assert d3["user"]["id"] == 777
+    assert d3["user"]["name"] == "John Doe"
+    assert d3["user"]["username"] == "johndoe"
+    assert d3["user"]["phone"] == "+1***6543"
+
+    # Case 4: Exception during check returns authorized: False with error string
+    mock_client.is_user_authorized.side_effect = RuntimeError("Network down")
+    r4 = client.get(f"/api/auth/me?token={token}")
+    assert r4.status_code == 200
+    assert r4.json()["authorized"] is False
+    assert "Network down" in r4.json()["error"]
+
+
+def test_auth_qr_and_phone_login_flow(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    token = get_ephemeral_token()
+
+    # QR: client is None -> 500
+    app.state.tg_client = None
+    c = TestClient(app)
+    r_qr_none = c.get(f"/api/auth/qr?token={token}")
+    assert r_qr_none.status_code == 500
+
+    # QR: client connected and returns QR
+    mock_client = AsyncMock()
+    mock_client.is_connected = MagicMock(return_value=True)
+    mock_qr = SimpleNamespace(
+        token="test_qr_token",
+        url="tg://login?token=xyz",
+        expires=datetime(2026, 9, 11, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    mock_client.qr_login = AsyncMock(return_value=mock_qr)
+    app.state.tg_client = mock_client
+    r_qr_ok = c.get(f"/api/auth/qr?token={token}")
+    assert r_qr_ok.status_code == 200
+    assert r_qr_ok.json()["token"] == "test_qr_token"
+    assert r_qr_ok.json()["url"] == "tg://login?token=xyz"
+
+    # Phone send_code: Invalid phone format -> 400
+    r_bad_phone = c.post(
+        "/api/auth/phone/send_code",
+        json={"phone": "12345"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_bad_phone.status_code == 400
+    assert "Invalid E.164" in r_bad_phone.text
+
+    # Phone send_code: Valid E.164
+    mock_client.send_code_request = AsyncMock(return_value=SimpleNamespace(phone_code_hash="hash_123"))
+    r_send_ok = c.post(
+        "/api/auth/phone/send_code",
+        json={"phone": "+15551234567"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_send_ok.status_code == 200
+    assert r_send_ok.json()["status"] == "code_sent"
+    assert r_send_ok.json()["phone_code_hash"] == "hash_123"
+
+    # Phone sign_in: 2FA required (SessionPasswordNeededError)
+    mock_client.sign_in = AsyncMock(side_effect=SessionPasswordNeededError(None))
+    r_2fa_req = c.post(
+        "/api/auth/phone/sign_in",
+        json={"phone": "+15551234567", "code": "12345"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_2fa_req.status_code == 200
+    assert r_2fa_req.json() == {"status": "2fa_required"}
+
+    # Phone sign_in: Success
+    mock_client.sign_in = AsyncMock(return_value=None)
+    r_sign_ok = c.post(
+        "/api/auth/phone/sign_in",
+        json={"phone": "+15551234567", "code": "12345"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_sign_ok.status_code == 200
+    assert r_sign_ok.json() == {"status": "authorized"}
+
+    # 2FA endpoint: Success
+    r_2fa_ok = c.post(
+        "/api/auth/2fa",
+        json={"password": "mypassword"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_2fa_ok.status_code == 200
+    assert r_2fa_ok.json() == {"status": "authorized"}
+
+    # 2FA endpoint: Invalid password -> 400
+    mock_client.sign_in = AsyncMock(side_effect=ValueError("Password incorrect"))
+    r_2fa_fail = c.post(
+        "/api/auth/2fa",
+        json={"password": "wrongpassword"},
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_2fa_fail.status_code == 400
+    assert "Password incorrect" in r_2fa_fail.text
+
+
+def test_api_resolve_target_endpoint(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    token = get_ephemeral_token()
+    c = TestClient(app)
+
+    mock_client = AsyncMock()
+    mock_client.is_connected = MagicMock(return_value=True)
+    app.state.tg_client = mock_client
+
+    with patch("src.web.routes_tg.resolve_target") as mock_resolve:
+        mock_resolve.return_value = SimpleNamespace(
+            entity=SimpleNamespace(id=987, title="My Channel"),
+            kind="channel",
+            value="mychannel",
+        )
+        resp = c.post(
+            "/api/resolve",
+            json={"target": "@mychannel"},
+            headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == 987
+        assert data["title"] == "My Channel"
+        assert data["kind"] == "channel"
+        assert data["is_participant"] is True
+
+        # Error branch -> 400
+        mock_resolve.side_effect = RuntimeError("Channel does not exist")
+        resp_err = c.post(
+            "/api/resolve",
+            json={"target": "@notfound"},
+            headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+        )
+        assert resp_err.status_code == 400
+        assert "Cannot resolve target" in resp_err.text
+
+
+def test_system_storage_and_download_cancel_routes(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    app.state.out_dir = str(tmp_path)
+    token = get_ephemeral_token()
+    c = TestClient(app)
+
+    # Storage endpoint
+    r_storage = c.get(f"/api/system/storage?token={token}")
+    assert r_storage.status_code == 200
+    st = r_storage.json()
+    assert "total_bytes" in st
+    assert "free_bytes" in st
+    assert "used_percent" in st
+    assert "is_low_space" in st
+
+    # Cancel endpoint when idle -> no_active_job
+    r_cancel_idle = c.post(
+        "/api/download/cancel",
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_cancel_idle.status_code == 200
+    assert r_cancel_idle.json() == {"status": "no_active_job"}
+
+    # Cancel endpoint when running -> cancelling
+    app.state.job_manager._is_running = True
+    app.state.job_manager._active_job_id = "job-active"
+    r_cancel_active = c.post(
+        "/api/download/cancel",
+        headers={"X-Auth-Token": token, "Origin": "http://127.0.0.1:8000"},
+    )
+    assert r_cancel_active.status_code == 200
+    assert r_cancel_active.json() == {"status": "cancelling"}
+    assert app.state.job_manager._cancel_event.is_set()
+
+    # State snapshot endpoint
+    r_state = c.get(f"/api/download/state?token={token}")
+    assert r_state.status_code == 200
+    state_data = r_state.json()
+    assert "snapshot" in state_data
+    assert "logs" in state_data
+
+
+def test_job_manager_flood_wait_and_broadcast():
+    jm = JobManager()
+    q1 = jm.subscribe()
+    q2 = jm.subscribe()
+
+    jm.set_flood_wait(45)
+    snap = jm.get_snapshot()
+    assert snap["flood_wait_seconds"] == 45
+    assert any("FloodWait 45s" in log for log in jm.get_recent_logs())
+
+    evt1 = q1.get_nowait()
+    assert evt1["type"] == "LOG"
+    evt2 = q1.get_nowait()
+    assert evt2["type"] == "FLOOD_WAIT"
+    assert evt2["seconds"] == 45
+
+    jm.unsubscribe(q1)
+    jm.add_log("another message")
+    # q1 is unsubscribed and should be empty
+    assert q1.empty()
+    # q2 receives the event
+    assert not q2.empty()
+
+
+def test_job_manager_run_job_failure_state(tmp_path: Path):
+    jm = JobManager()
+    conn = init_db(":memory:")
+    q = jm.subscribe()
+
+    async def run_failure_job():
+        with patch("src.downloader.download_chat", side_effect=RuntimeError("Download aborted unexpectedly")):
+            job_id = await jm.start_job(None, "@dummy", SimpleNamespace(limit=10), tmp_path, conn)
+            # Wait for the async task to finish
+            await asyncio.gather(jm._active_task, return_exceptions=True)
+            return job_id
+
+    asyncio.run(run_failure_job())
+    snap = jm.get_snapshot()
+    assert snap["status"] == "failed"
+    assert jm.is_running() is False
+    assert any("error: Download aborted unexpectedly" in log for log in jm.get_recent_logs())
+
+    # Verify broadcast of failure
+    received_types = []
+    while not q.empty():
+        received_types.append(q.get_nowait()["type"])
+    assert "FAILED" in received_types
 
 

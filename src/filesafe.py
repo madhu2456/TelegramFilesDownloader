@@ -1,8 +1,16 @@
-"""File safety: sanitize, O_EXCL create, atomic replace, disk check."""
 import errno
 import hashlib
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import UnsafeDirectoryError
+else:
+    try:
+        from .config import UnsafeDirectoryError
+    except ImportError:
+        from config import UnsafeDirectoryError
 
 os.umask(0o077)
 _ALLOW = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
@@ -64,5 +72,5 @@ def assert_safe_out(out):
     d = Path(out)
     d.mkdir(parents=True, exist_ok=True)
     if d.stat().st_mode & 0o002:
-        raise SystemExit(f"Refusing world-writable dir: {d}")
+        raise UnsafeDirectoryError(f"Refusing world-writable dir: {d}")
     return d

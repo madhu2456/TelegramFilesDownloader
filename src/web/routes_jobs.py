@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from src.downloader import DownloadOpts
 from src.resolver import resolve_target
 from src.store import init_db
+from src.web.client_helpers import _ensure_connected
 from src.web.job_manager import JobConflictError, JobManager
 from src.web.security import verify_origin, verify_token
 
@@ -43,17 +44,16 @@ async def start_download(req: DownloadStartRequest, request: Request):
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
 
-    if not client.is_connected():
-        await client.connect()
-
-    out_dir = Path(getattr(request.app.state, "out_dir", "out"))
-    out_dir.mkdir(parents=True, exist_ok=True)
-    db = init_db(out_dir / "manifest.db")
+    await _ensure_connected(client)
 
     try:
         resolved = await resolve_target(client, req.target, join=req.join)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Target resolution failed: {e}")
+
+    out_dir = Path(getattr(request.app.state, "out_dir", "out"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    db = init_db(out_dir / "manifest.db")
 
     raw_lim = None if req.no_limit else req.limit
     eff_lim = None if (raw_lim is None or int(raw_lim) <= 0) else int(raw_lim)
@@ -77,10 +77,20 @@ async def start_download(req: DownloadStartRequest, request: Request):
         job_id = await jm.start_job(client, resolved, opts, out_dir, db)
         return {"status": "started", "job_id": job_id}
     except JobConflictError:
+        try:
+            db.close()
+        except Exception:
+            pass
         return JSONResponse(
             status_code=409,
             content={"error": "CONFLICT", "detail": "A download job is already running", "job_id": jm._active_job_id}
         )
+    except Exception:
+        try:
+            db.close()
+        except Exception:
+            pass
+        raise
 
 @router.post("/api/download/cancel")
 async def cancel_download(request: Request):

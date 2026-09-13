@@ -50,6 +50,16 @@ function getHeaders() {
   };
 }
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // 2. Linear-Grade Floating Toast Notification Stack
 function showToast(message, type = 'info', title = null, duration = 3800) {
   const container = document.getElementById('toastContainer');
@@ -82,8 +92,8 @@ function showToast(message, type = 'info', title = null, duration = 3800) {
   toast.innerHTML = `
     <div class="toast-icon">${icons[type] || icons.info}</div>
     <div class="toast-content">
-      <div class="toast-title">${titles[type]}</div>
-      <div class="toast-message">${message}</div>
+      <div class="toast-title">${escapeHtml(titles[type])}</div>
+      <div class="toast-message">${escapeHtml(message)}</div>
     </div>
     <button class="toast-close" aria-label="Dismiss">&times;</button>
   `;
@@ -94,8 +104,20 @@ function showToast(message, type = 'info', title = null, duration = 3800) {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 200);
   };
 
+  const startTimer = () => {
+    toast._timer = setTimeout(dismiss, duration);
+  };
+  const pauseTimer = () => {
+    if (toast._timer) clearTimeout(toast._timer);
+  };
+
+  toast.addEventListener('mouseenter', pauseTimer);
+  toast.addEventListener('mouseleave', startTimer);
+  toast.addEventListener('focusin', pauseTimer);
+  toast.addEventListener('focusout', startTimer);
+
   toast.querySelector('.toast-close').onclick = dismiss;
-  toast._timer = setTimeout(dismiss, duration);
+  startTimer();
   container.appendChild(toast);
 }
 
@@ -167,7 +189,9 @@ function handleWsEvent(data) {
     }
     return;
   }
-  if (data.type === 'INIT_STATE' || data.type === 'PROGRESS' || data.type === 'COMPLETED' || data.type === 'FAILED') {
+  if (data.type === 'INIT_STATE') {
+    handleInitState(data);
+  } else if (data.type === 'PROGRESS' || data.type === 'COMPLETED' || data.type === 'FAILED') {
     if (data.state) updateJobUI(data.state);
   }
   if (data.type === 'LOG') {
@@ -181,6 +205,21 @@ function handleWsEvent(data) {
     loadMedia();
     updateStorage();
   }
+}
+
+function handleInitState(data) {
+  if (data.state) updateJobUI(data.state);
+  if (Array.isArray(data.logs)) {
+    const term = document.getElementById('terminalContent') || document.getElementById('terminalLogs');
+    if (term) term._logLines = [];
+    if (data.logs.length > 0) {
+      data.logs.forEach(log => appendLog(log));
+    }
+  }
+}
+
+function appendLog(log) {
+  appendTerminalLog(log);
 }
 
 function updateJobUI(s) {
@@ -222,18 +261,47 @@ function updateJobUI(s) {
   document.getElementById('jobSkippedText').innerText = `Skipped: ${s.skipped_msgs || 0}`;
   const mb = ((s.bytes_total || 0) / (1024 * 1024)).toFixed(1);
   document.getElementById('jobBytesText').innerText = `${mb} MB`;
+
+  const curFileEl = document.getElementById('jobCurrentFile');
+  if (curFileEl) {
+    curFileEl.innerText = s.current_file ? `File: ${s.current_file}` : 'File: --';
+    curFileEl.title = s.current_file_path || s.relpath || s.current_file || '';
+  }
+  const etaEl = document.getElementById('jobEtaText');
+  if (etaEl) {
+    if (s.eta_seconds !== null && s.eta_seconds !== undefined && s.status === 'running') {
+      const totalSec = Math.max(0, Math.floor(s.eta_seconds));
+      if (totalSec >= 3600) {
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const sec = totalSec % 60;
+        etaEl.innerText = `ETA: ${h}h ${m}m ${sec}s`;
+      } else {
+        const m = Math.floor(totalSec / 60);
+        const sec = totalSec % 60;
+        etaEl.innerText = `ETA: ${m}m ${sec}s`;
+      }
+    } else {
+      etaEl.innerText = 'ETA: --';
+    }
+  }
 }
 
 function appendTerminalLog(msg) {
   const el = document.getElementById('terminalLogs');
-  el.innerText += `\n${msg}`;
-  el.scrollTop = el.scrollHeight;
+  if (!el) return;
+  const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  if (!el._logLines) el._logLines = [];
+  el._logLines.push(msg);
+  if (el._logLines.length > 500) el._logLines.shift();
+  el.textContent = el._logLines.join('\n');
+  if (isNearBottom) el.scrollTop = el.scrollHeight;
 }
 
 // 4. Telegram Account & Auth Wizard
 async function checkAuth() {
   try {
-    const res = await fetch(`/api/auth/me?token=${token}`, { headers: getHeaders() });
+    const res = await fetch('/api/auth/me', { headers: getHeaders() });
     const data = await res.json();
     if (data.authorized && data.user) {
       document.getElementById('userPill').innerText = `${data.user.name || 'User'} (${data.user.phone || 'Masked'})`;
@@ -248,6 +316,30 @@ async function checkAuth() {
   }
 }
 
+let qrPollTimer = null;
+
+function startQrPolling() {
+  stopQrPolling();
+  qrPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/auth/qr/status', { headers: getHeaders() });
+      const data = await res.json();
+      if (data.authorized) {
+        stopQrPolling();
+        showToast('Logged in successfully via Telegram QR!', 'success', 'Authenticated');
+        checkAuth();
+      }
+    } catch (e) {}
+  }, 2000);
+}
+
+function stopQrPolling() {
+  if (qrPollTimer) {
+    clearInterval(qrPollTimer);
+    qrPollTimer = null;
+  }
+}
+
 function switchAuthTab(tab) {
   const phoneBtn = document.getElementById('tabBtnPhone');
   const qrBtn = document.getElementById('tabBtnQr');
@@ -255,13 +347,18 @@ function switchAuthTab(tab) {
   const qrTab = document.getElementById('qrAuthTab');
 
   if (tab === 'phone') {
+    stopQrPolling();
     phoneBtn.classList.add('active');
+    phoneBtn.setAttribute('aria-selected', 'true');
     qrBtn.classList.remove('active');
+    qrBtn.setAttribute('aria-selected', 'false');
     phoneTab.style.display = 'block';
     qrTab.style.display = 'none';
   } else {
     qrBtn.classList.add('active');
+    qrBtn.setAttribute('aria-selected', 'true');
     phoneBtn.classList.remove('active');
+    phoneBtn.setAttribute('aria-selected', 'false');
     qrTab.style.display = 'block';
     phoneTab.style.display = 'none';
     loadQrCode();
@@ -272,13 +369,22 @@ async function loadQrCode() {
   const container = document.getElementById('qrContainer');
   container.innerHTML = '<div style="color:#000; padding:2rem 0; font-size:0.85rem;">Generating QR Code...</div>';
   try {
-    const res = await fetch(`/api/auth/qr?token=${token}`, { headers: getHeaders() });
+    const res = await fetch('/api/auth/qr', { headers: getHeaders() });
     const data = await res.json();
-    if (data.url) {
+    if (data.svg) {
       container.innerHTML = `
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.url)}" alt="Telegram QR" style="width:180px; height:180px; display:block;">
-        <div style="font-size:0.75rem; color:#666; margin-top:0.5rem;">Expires: ${new Date(data.expires).toLocaleTimeString()}</div>
+        <div style="width:180px; height:180px; display:flex; align-items:center; justify-content:center;">${data.svg}</div>
+        <div style="font-size:0.75rem; color:#666; margin-top:0.5rem;">Expires: ${data.expires ? new Date(data.expires).toLocaleTimeString() : 'in 2 min'}</div>
       `;
+      startQrPolling();
+    } else if (data.url) {
+      container.innerHTML = `
+        <div style="color:#333; padding:1.5rem 0.5rem; font-size:0.82rem; word-break:break-all;">
+          <p style="margin-bottom:0.5rem; font-weight:600;">Scan URL in Telegram:</p>
+          <a href="${escapeHtml(data.url)}" target="_blank" style="color:#0369A1; font-weight:600; text-decoration:underline;">Open Telegram Login Link</a>
+        </div>
+      `;
+      startQrPolling();
     } else {
       container.innerHTML = '<div style="color:#e11d48; padding:2rem 0;">QR generation unavailable.</div>';
     }
@@ -294,7 +400,7 @@ async function sendPhoneCode() {
     return;
   }
   try {
-    const res = await fetch(`/api/auth/phone/send_code?token=${token}`, {
+    const res = await fetch('/api/auth/phone/send_code', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ phone }),
@@ -320,7 +426,7 @@ async function signInWithCode() {
     return;
   }
   try {
-    const res = await fetch(`/api/auth/phone/sign_in?token=${token}`, {
+    const res = await fetch('/api/auth/phone/sign_in', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ phone, code }),
@@ -361,9 +467,13 @@ function togglePasswordVisibility(inputId, btn) {
   if (input.type === 'password') {
     input.type = 'text';
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+    btn.setAttribute('aria-label', 'Hide password');
+    btn.setAttribute('aria-pressed', 'true');
   } else {
     input.type = 'password';
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    btn.setAttribute('aria-label', 'Show password');
+    btn.setAttribute('aria-pressed', 'false');
   }
 }
 
@@ -374,7 +484,7 @@ async function submitTwoFactorPassword() {
     return;
   }
   try {
-    const res = await fetch(`/api/auth/2fa?token=${token}`, {
+    const res = await fetch('/api/auth/2fa', {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ password: pwd }),
@@ -396,11 +506,17 @@ async function submitTwoFactorPassword() {
 async function loadDialogs(kind = 'all') {
   ['filterAll', 'filterChannel', 'filterGroup', 'filterDm'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.classList.remove('active');
+    if (el) {
+      el.classList.remove('active');
+      el.setAttribute('aria-selected', 'false');
+    }
   });
   const activeId = kind === 'channel' ? 'filterChannel' : (kind === 'group' ? 'filterGroup' : (kind === 'dm' ? 'filterDm' : 'filterAll'));
   const activeBtn = document.getElementById(activeId);
-  if (activeBtn) activeBtn.classList.add('active');
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.setAttribute('aria-selected', 'true');
+  }
 
   const list = document.getElementById('dialogList');
   if (!list) return;
@@ -417,18 +533,16 @@ async function loadDialogs(kind = 'all') {
 
   list.innerHTML = `
     <div style="padding:2rem 1rem; text-align:center; color:var(--text-muted); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.75rem;">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-glow)" stroke-width="2.5" stroke-linecap="round">
+      <svg class="spinner-rotate" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-glow)" stroke-width="2.5" stroke-linecap="round">
         <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
-        <path d="M12 2a10 10 0 0 1 10 10">
-          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
-        </path>
+        <path d="M12 2a10 10 0 0 1 10 10" />
       </svg>
       <span>Fetching dialogs...</span>
     </div>
   `;
 
   try {
-    const res = await fetch('/api/dialogs?kind=' + encodeURIComponent(kind) + '&token=' + encodeURIComponent(token), { headers: getHeaders() });
+    const res = await fetch('/api/dialogs?kind=' + encodeURIComponent(kind), { headers: getHeaders() });
     if (res.status === 401) {
       list.innerHTML = `
         <div style="padding:1.5rem 1rem; text-align:center;">
@@ -442,7 +556,7 @@ async function loadDialogs(kind = 'all') {
       const errMsg = err.detail || 'Failed to load dialogs.';
       list.innerHTML = `
         <div style="padding:1.5rem 1rem; text-align:center;">
-          <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">${errMsg}</div>
+          <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">${escapeHtml(errMsg)}</div>
           <button class="btn btn-cyan" onclick="loadDialogs('${kind}')" style="margin-top:0.5rem; padding:0.35rem 0.8rem; font-size:0.8rem;">↻ Retry</button>
         </div>
       `;
@@ -484,18 +598,17 @@ function renderDialogs(dialogs) {
     const rawHandle = d.handle ? d.handle : (d.username ? (d.username.startsWith('@') ? d.username : '@' + d.username) : '');
     const target = rawHandle || String(d.id || '');
     const displaySub = rawHandle || ('#' + (d.id || ''));
-    const safeTarget = target.replace(/'/g, "\'");
 
     return `
-    <div class="dialog-item" onclick="armTarget('${safeTarget}')">
-      <div style="overflow:hidden; padding-right:0.5rem;">
-        <div style="font-weight:600; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.name || 'Unnamed Chat'}</div>
+    <div class="dialog-item" data-target="${escapeHtml(target)}">
+      <div style="overflow:hidden; padding-right:0.5rem; pointer-events:none;">
+        <div style="font-weight:600; font-size:0.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(d.name || 'Unnamed Chat')}</div>
         <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.25rem;">
-          <span class="category-badge ${badgeClass[kind] || 'badge-channel'}">${kind.toUpperCase()}</span>
-          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${displaySub}</span>
+          <span class="category-badge ${badgeClass[kind] || 'badge-channel'}">${escapeHtml(kind.toUpperCase())}</span>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">${escapeHtml(displaySub)}</span>
         </div>
       </div>
-      <button class="btn btn-cyan" onclick="event.stopPropagation(); armTarget('${safeTarget}')" style="padding:0.4rem 0.8rem; font-size:0.78rem; min-height:36px; flex-shrink:0;">Arm</button>
+      <button class="btn btn-cyan chat-arm-btn" data-target="${escapeHtml(target)}" aria-label="Arm ${escapeHtml(d.name || target)} for download" style="font-size:0.78rem; flex-shrink:0;">Arm</button>
     </div>
     `;
   }).join('');
@@ -531,6 +644,15 @@ function armTarget(t) {
   showToast(`Armed target: ${t}`, 'info', 'Target Configured');
 }
 
+function toggleAdvancedFilters() {
+  const p = document.getElementById('advFiltersPanel');
+  const btn = document.getElementById('advFilterToggleBtn');
+  if (!p) return;
+  const isOpen = p.style.display !== 'none';
+  p.style.display = isOpen ? 'none' : 'grid';
+  if (btn) btn.setAttribute('aria-expanded', String(!isOpen));
+}
+
 // 7. Download Management
 async function startDownload() {
   const target = document.getElementById('targetInput').value.trim();
@@ -539,6 +661,10 @@ async function startDownload() {
   const limit = noLimit ? null : (isNaN(rawLimit) ? 100 : rawLimit);
   const filter = document.getElementById('filterSelect').value || null;
   const search = document.getElementById('searchInput').value.trim() || null;
+
+  const after = document.getElementById('afterInput')?.value.trim() || null;
+  const before = document.getElementById('beforeInput')?.value.trim() || null;
+  const from_user = document.getElementById('fromUserInput')?.value.trim() || null;
 
   const sync = document.getElementById('syncToggle')?.checked ?? true;
   const resume = document.getElementById('resumeToggle')?.checked ?? true;
@@ -554,10 +680,10 @@ async function startDownload() {
   showToast(`Initiating download job for ${target}...`, 'info');
 
   try {
-    const res = await fetch(`/api/download/start?token=${token}`, {
+    const res = await fetch('/api/download/start', {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ target, limit, no_limit: noLimit, filter, search, sync, resume, dry_run, takeout, join }),
+      body: JSON.stringify({ target, limit, no_limit: noLimit, filter, search, sync, resume, dry_run, takeout, join, after, before, from_user }),
     });
 
     if (res.status === 409) {
@@ -574,9 +700,30 @@ async function startDownload() {
   }
 }
 
+let cancelConfirmTimer = null;
+
 async function cancelDownload() {
+  const btn = document.getElementById('cancelJobBtn');
+  if (!btn) return;
+  if (!btn.dataset.confirming) {
+    btn.dataset.confirming = 'true';
+    btn.dataset.originalHtml = btn.innerHTML;
+    btn.innerHTML = '⚠️ Confirm Cancel?';
+    btn.style.borderColor = 'var(--accent-amber)';
+    cancelConfirmTimer = setTimeout(() => {
+      btn.removeAttribute('data-confirming');
+      btn.innerHTML = btn.dataset.originalHtml;
+      btn.style.borderColor = '';
+    }, 3000);
+    return;
+  }
+  clearTimeout(cancelConfirmTimer);
+  btn.removeAttribute('data-confirming');
+  btn.innerHTML = btn.dataset.originalHtml;
+  btn.style.borderColor = '';
+
   try {
-    const res = await fetch(`/api/download/cancel?token=${token}`, {
+    const res = await fetch('/api/download/cancel', {
       method: 'POST',
       headers: getHeaders(),
     });
@@ -593,13 +740,55 @@ async function cancelDownload() {
 
 // 8. Media Gallery & Theater Lightbox Modal
 let mediaCache = [];
+let currentMediaKind = '';
+let currentMediaPage = 1;
+const currentMediaLimit = 24;
+let totalMediaCount = 0;
+let currentLightboxIndex = 0;
+
+function setMediaKindFilter(kind) {
+  currentMediaKind = kind;
+  currentMediaPage = 1;
+  ['All', 'Video', 'Photo', 'Audio', 'Doc'].forEach(tab => {
+    const tabEl = document.getElementById(`mediaTab${tab}`);
+    if (tabEl) {
+      const isActive = (tab === 'All' && !kind) || (tab.toLowerCase() === kind) || (tab === 'Doc' && kind === 'document');
+      tabEl.classList.toggle('active', isActive);
+      tabEl.setAttribute('aria-selected', String(isActive));
+    }
+  });
+  loadMedia();
+}
+
+function changeMediaPage(delta) {
+  const maxPage = Math.max(1, Math.ceil(totalMediaCount / currentMediaLimit));
+  const newPage = currentMediaPage + delta;
+  if (newPage >= 1 && newPage <= maxPage) {
+    currentMediaPage = newPage;
+    loadMedia();
+  }
+}
 
 async function loadMedia() {
   const grid = document.getElementById('mediaGrid');
+  if (!grid) return;
   try {
-    const res = await fetch(`/api/media?limit=50&token=${token}`, { headers: getHeaders() });
+    const offset = (currentMediaPage - 1) * currentMediaLimit;
+    let url = `/api/media?limit=${currentMediaLimit}&offset=${offset}`;
+    if (currentMediaKind) url += `&kind=${encodeURIComponent(currentMediaKind)}`;
+    const res = await fetch(url, { headers: getHeaders() });
     const data = await res.json();
     mediaCache = data.items || [];
+    totalMediaCount = data.total !== undefined ? data.total : (mediaCache.length + offset);
+
+    const maxPage = Math.max(1, Math.ceil(totalMediaCount / currentMediaLimit));
+    const pageInd = document.getElementById('mediaPageIndicator');
+    if (pageInd) pageInd.innerText = `Page ${currentMediaPage} / ${maxPage}`;
+    const prevBtn = document.getElementById('mediaPrevBtn');
+    if (prevBtn) prevBtn.disabled = currentMediaPage <= 1;
+    const nextBtn = document.getElementById('mediaNextBtn');
+    if (nextBtn) nextBtn.disabled = currentMediaPage >= maxPage;
+
     if (!mediaCache.length) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column: 1 / -1;">
@@ -615,13 +804,14 @@ async function loadMedia() {
 
     grid.innerHTML = mediaCache.map((item, idx) => {
       const isMissing = item.exists === false;
+      const streamUrlWithToken = `${item.stream_url}?token=${encodeURIComponent(token)}`;
       const actionBar = isMissing
-        ? `<div class="card-action-bar" onclick="event.stopPropagation();"><span class="card-action-btn disabled" title="File missing from disk" aria-disabled="true" onclick="event.stopPropagation();" style="opacity:0.4; cursor:not-allowed;">⚠️</span></div>`
+        ? `<div class="card-action-bar" onclick="event.stopPropagation();"><span class="card-action-btn disabled" title="File missing from disk" aria-disabled="true" style="opacity:0.4; cursor:not-allowed;">⚠️</span></div>`
         : `<div class="card-action-bar" onclick="event.stopPropagation();">
-            <a href="${item.stream_url}?token=${token}" target="_blank" rel="noopener noreferrer" class="card-action-btn" title="Open in browser" aria-label="Open ${item.filename} in new tab" onclick="event.stopPropagation();">
+            <a href="${streamUrlWithToken}" target="_blank" rel="noopener noreferrer" class="card-action-btn" title="Open in browser" aria-label="Open ${escapeHtml(item.filename)} in new tab">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
-            <a href="${item.stream_url}?token=${token}&download=1" download="${item.filename}" class="card-action-btn" title="Download file" aria-label="Download ${item.filename}" onclick="event.stopPropagation();">
+            <a href="${streamUrlWithToken}&download=1" download="${escapeHtml(item.filename)}" class="card-action-btn" title="Download file" aria-label="Download ${escapeHtml(item.filename)}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </a>
           </div>`;
@@ -630,7 +820,7 @@ async function loadMedia() {
       if (item.kind === 'video') {
         thumbContent = `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg><span style="font-size:0.65rem; color:var(--accent-cyan); font-weight:600;">VIDEO</span></div>`;
       } else if (item.kind === 'photo') {
-        thumbContent = `<img src="${item.stream_url}?token=${token}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">`;
+        thumbContent = `<img src="${streamUrlWithToken}" loading="lazy" style="width:100%; height:100%; object-fit:cover;" alt="${escapeHtml(item.filename)}">`;
       } else if (item.kind === 'audio') {
         thumbContent = `<div style="display:flex; flex-direction:column; align-items:center; gap:0.3rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg><span style="font-size:0.65rem; color:#A855F7; font-weight:600;">AUDIO</span></div>`;
       } else {
@@ -638,16 +828,16 @@ async function loadMedia() {
       }
 
       return `
-        <div class="media-card" onclick="openMediaLightboxByIndex(${idx})">
+        <div class="media-card" data-idx="${idx}" tabindex="0" role="button" aria-label="View ${escapeHtml(item.filename)}">
           ${actionBar}
-          <div class="media-thumb">
+          <div class="media-thumb" style="pointer-events:none;">
             ${thumbContent}
           </div>
-          <div class="media-meta">
-            <div class="name" title="${item.filename}">${item.filename}</div>
+          <div class="media-meta" style="pointer-events:none;">
+            <div class="name" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</div>
             <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.75rem;">
-              <span>${(item.size / (1024 * 1024)).toFixed(2)} MB</span>
-              <span style="font-family:var(--font-mono); color:var(--accent-cyan);">${item.kind.toUpperCase()}</span>
+              <span>${((item.size || 0) / (1024 * 1024)).toFixed(2)} MB</span>
+              <span style="font-family:var(--font-mono); color:var(--accent-cyan);">${escapeHtml(item.kind.toUpperCase())}</span>
             </div>
           </div>
         </div>
@@ -659,55 +849,71 @@ async function loadMedia() {
 }
 
 function openMediaLightboxByIndex(idx) {
+  if (idx < 0) idx = mediaCache.length - 1;
+  if (idx >= mediaCache.length) idx = 0;
   const item = mediaCache[idx];
   if (!item) return;
+  currentLightboxIndex = idx;
   activeLightboxItem = item;
   window._lastActiveElement = document.activeElement;
 
   document.getElementById('lightboxTitle').innerText = item.filename;
-  document.getElementById('lightboxSize').innerText = `${(item.size / (1024 * 1024)).toFixed(2)} MB (${item.size} bytes)`;
+  document.getElementById('lightboxSize').innerText = `${((item.size || 0) / (1024 * 1024)).toFixed(2)} MB (${item.size || 0} bytes)`;
   document.getElementById('lightboxMime').innerText = item.mime || 'application/octet-stream';
   document.getElementById('lightboxMsgId').innerText = `#${item.msg_id || '--'}`;
   document.getElementById('lightboxSha').innerText = item.sha256 || 'N/A';
   
+  const streamUrlWithToken = `${item.stream_url}?token=${encodeURIComponent(token)}`;
   const dlLink = document.getElementById('lightboxDownloadLink');
-  if (dlLink) dlLink.href = `${item.stream_url}?token=${token}&download=1`;
+  if (dlLink) dlLink.href = `${streamUrlWithToken}&download=1`;
   const openLink = document.getElementById('lightboxOpenLink');
-  if (openLink) openLink.href = `${item.stream_url}?token=${token}`;
+  if (openLink) openLink.href = streamUrlWithToken;
 
   const container = document.getElementById('lightboxMediaContainer');
   if (item.kind === 'video') {
     container.innerHTML = `
       <video id="theaterVideo" controls autoplay preload="none" style="width:100%; height:100%; max-height:520px;">
-        <source src="${item.stream_url}?token=${token}">
+        <source src="${streamUrlWithToken}">
         Your browser does not support HTML5 video.
       </video>
     `;
+    const v = document.getElementById('theaterVideo');
+    if (v && v.play) v.play().catch(() => {});
   } else if (item.kind === 'photo') {
-    container.innerHTML = `<img src="${item.stream_url}?token=${token}" style="max-width:100%; max-height:520px; object-fit:contain;">`;
+    container.innerHTML = `<img src="${streamUrlWithToken}" style="max-width:100%; max-height:520px; object-fit:contain;" alt="${escapeHtml(item.filename)}">`;
   } else if (item.kind === 'audio') {
     container.innerHTML = `
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem 1rem; width:100%;">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#A855F7" stroke-width="1.5" style="margin-bottom:1rem;"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
         <audio id="theaterAudio" controls autoplay style="width:100%; max-width:480px; margin-top:1rem;">
-          <source src="${item.stream_url}?token=${token}">
+          <source src="${streamUrlWithToken}">
           Your browser does not support HTML5 audio.
         </audio>
       </div>
     `;
+    const a = document.getElementById('theaterAudio');
+    if (a && a.play) a.play().catch(() => {});
   } else {
     container.innerHTML = `
       <div style="text-align:center; padding:3rem 1rem;">
         <div style="margin-bottom:1rem;">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         </div>
-        <div style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${item.filename}</div>
+        <div style="font-size:0.9rem; font-weight:600; color:var(--text-main);">${escapeHtml(item.filename)}</div>
         <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem;">Binary document ready for direct open or download.</div>
       </div>
     `;
   }
 
   document.getElementById('mediaLightboxModal').style.display = 'flex';
+}
+
+function prevMediaLightbox() {
+  if (mediaCache.length > 0) openMediaLightboxByIndex(currentLightboxIndex - 1);
+}
+
+function nextMediaLightbox() {
+  if (mediaCache.length > 0) openMediaLightboxByIndex(currentLightboxIndex + 1);
 }
 
 // Explicit Video/Audio Pause & Source Detachment Teardown
@@ -719,7 +925,7 @@ function closeMediaLightbox() {
       el.pause();
       el.currentTime = 0;
       el.querySelectorAll('source').forEach(s => s.removeAttribute('src'));
-      el.removeAttribute('src'); // Stop background HTTP 206 chunk buffering
+      el.removeAttribute('src');
       el.load();
     } catch (e) {}
   });
@@ -729,7 +935,6 @@ function closeMediaLightbox() {
   modal.style.display = 'none';
   activeLightboxItem = null;
 
-  // Restore Focus (Critic ELEV-05)
   if (window._lastActiveElement) {
     window._lastActiveElement.focus();
   }
@@ -754,7 +959,7 @@ function copyToClipboard(text) {
 // 9. Storage & System Health Monitor
 async function updateStorage() {
   try {
-    const res = await fetch(`/api/system/storage?token=${token}`, { headers: getHeaders() });
+    const res = await fetch('/api/system/storage', { headers: getHeaders() });
     const data = await res.json();
     const freeGb = (data.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const totalGb = (data.total_bytes / (1024 * 1024 * 1024)).toFixed(1);
@@ -773,13 +978,82 @@ async function updateStorage() {
 
 // 10. Global Keyboard Navigation (Productivity Shortcuts)
 document.addEventListener('keydown', (e) => {
-  if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') {
+  const activeTag = document.activeElement ? document.activeElement.tagName : '';
+  const twoFactorModal = document.getElementById('twoFactorModal');
+  const mediaLightboxModal = document.getElementById('mediaLightboxModal');
+  const activeModal = (twoFactorModal && twoFactorModal.style.display !== 'none') ? twoFactorModal
+                    : (mediaLightboxModal && mediaLightboxModal.style.display !== 'none') ? mediaLightboxModal
+                    : null;
+  const isModalOpen = !!activeModal;
+
+  if (activeModal && e.key === 'Tab') {
+    const focusableSelectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusable = Array.from(activeModal.querySelectorAll(focusableSelectors))
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (focusable.length > 0) {
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last || !activeModal.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    } else {
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (e.key === '/' && activeTag !== 'INPUT' && activeTag !== 'SELECT' && activeTag !== 'TEXTAREA' && !isModalOpen) {
     e.preventDefault();
     const search = document.getElementById('dialogSearch');
     if (search) search.focus();
   } else if (e.key === 'Escape') {
     closeTwoFactorModal();
     closeMediaLightbox();
+  } else if (e.key === 'ArrowLeft') {
+    if (document.getElementById('mediaLightboxModal')?.style.display !== 'none') {
+      prevMediaLightbox();
+    }
+  } else if (e.key === 'ArrowRight') {
+    if (document.getElementById('mediaLightboxModal')?.style.display !== 'none') {
+      nextMediaLightbox();
+    }
+  }
+});
+
+// Event delegations
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('dialogList')?.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-target]');
+    if (item && item.dataset.target) {
+      armTarget(item.dataset.target);
+    }
+  });
+
+  const mediaGrid = document.getElementById('mediaGrid');
+  if (mediaGrid) {
+    mediaGrid.addEventListener('click', (e) => {
+      const card = e.target.closest('.media-card');
+      if (card && card.dataset.idx !== undefined) {
+        openMediaLightboxByIndex(parseInt(card.dataset.idx, 10));
+      }
+    });
+    mediaGrid.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const card = e.target.closest('.media-card');
+        if (card && card.dataset.idx !== undefined) {
+          e.preventDefault();
+          openMediaLightboxByIndex(parseInt(card.dataset.idx, 10));
+        }
+      }
+    });
   }
 });
 

@@ -6,6 +6,8 @@ from telethon.errors import SessionPasswordNeededError
 
 from src.dialogs import fetch_dialog_rows
 from src.resolver import resolve_target
+from src.web.client_helpers import _ensure_connected
+from src.web.qr import generate_qr_svg
 from src.web.security import mask_phone
 
 router = APIRouter()
@@ -31,8 +33,7 @@ async def get_auth_me(request: Request):
     if not client:
         return {"authorized": False}
     try:
-        if not client.is_connected():
-            await client.connect()
+        await _ensure_connected(client)
         if not await client.is_user_authorized():
             return {"authorized": False}
         me = await client.get_me()
@@ -57,18 +58,32 @@ async def get_auth_qr(request: Request):
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     try:
         qr = await client.qr_login()
+        request.app.state.active_qr = qr
         expires_str = qr.expires.isoformat() if hasattr(qr, "expires") and qr.expires else None
+        qr_svg = generate_qr_svg(qr.url)
         return {
             "token": getattr(qr, "token", ""),
             "url": qr.url,
+            "svg": qr_svg,
             "expires": expires_str,
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+@router.get("/api/auth/qr/status")
+async def get_auth_qr_status(request: Request):
+    client = getattr(request.app.state, "tg_client", None)
+    if not client:
+        raise HTTPException(status_code=500, detail="Telegram client not initialized")
+    await _ensure_connected(client)
+    try:
+        is_auth = await client.is_user_authorized()
+        return {"authorized": bool(is_auth)}
+    except Exception as exc:
+        return {"authorized": False, "error": str(exc)}
 
 @router.post("/api/auth/phone/send_code")
 async def phone_send_code(req: PhoneSendCodeRequest, request: Request):
@@ -78,8 +93,7 @@ async def phone_send_code(req: PhoneSendCodeRequest, request: Request):
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     try:
         res = await client.send_code_request(phone)
         request.app.state.phone_code_hash = res.phone_code_hash
@@ -96,8 +110,7 @@ async def phone_sign_in(req: PhoneSignInRequest, request: Request):
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     code_hash = req.phone_code_hash or getattr(request.app.state, "phone_code_hash", None)
     try:
         await client.sign_in(phone=req.phone.strip(), code=req.code.strip(), phone_code_hash=code_hash)
@@ -112,8 +125,7 @@ async def auth_2fa(req: TwoFactorRequest, request: Request):
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     try:
         await client.sign_in(password=req.password)
         return {"status": "authorized"}
@@ -125,8 +137,7 @@ async def list_dialogs(request: Request, limit: int = 100, kind: str = "all", se
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     try:
         raw_rows = await fetch_dialog_rows(client, limit=min(max(1, limit), 500), kind=kind)
         normalized_rows = []
@@ -169,8 +180,7 @@ async def resolve(req: ResolveTargetRequest, request: Request):
     client = getattr(request.app.state, "tg_client", None)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
-    if not client.is_connected():
-        await client.connect()
+    await _ensure_connected(client)
     try:
         resolved = await resolve_target(client, req.target, join=req.join)
         ent = resolved.entity
