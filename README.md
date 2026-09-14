@@ -29,6 +29,15 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
   - **Chat Explorer & Target Arming**: Searchable account dialog picker (channels, groups, DMs) with 1-click target arming into the download configuration panel.
   - **System Storage Health Monitor**: Live disk capacity telemetry via `os.statvfs` with dynamic low-space warning alerts (<10% threshold).
   - **Decoupled JobManager Resilience**: Background task architecture completely detached from browser sessions; downloads survive browser tab closures, page reloads, and network interruptions under singleton mutex protection.
+- **Direct Browser File Extractor & Streaming (`POST /api/chat/scan` & `GET /api/direct/download`)**:
+  - **Pre-Download Inspection**: Click "Extract & Select Files (Browser)" before starting downloads to scan and inspect media items directly from any chat.
+  - **Zero Server Disk Footprint**: Media chunks stream directly from Telegram MTProto through FastAPI into the client browser, completely bypassing server disk storage (`/out`) with bounded 512 KB memory buffers.
+  - **Selective Batch Downloads**: Checkbox selection for individual or all files, live instant search, kind filtering pills (`All`, `Video`, `Photo`, `Audio`, `Docs`), total selected size calculation, and a 750ms staggered queue engine to avoid browser popup blockers.
+- **On-The-Fly Streaming ZIP Engine (`POST /api/direct/zip/prepare` & `GET /api/direct/zip/stream/{ticket}`)**:
+  - **Single Browser Download Confirmation**: Package hundreds of files into a single `.zip` archive with exactly one browser confirmation, eliminating the friction of dozens or hundreds of individual download popups.
+  - **Zero Server Disk Footprint**: Streams directly from Telegram MTProto through FastAPI into the browser using PKWARE Bit 3 streaming data descriptors (`0x08074b50`), generating the archive on-the-fly with constant $O(1)$ 512 KB memory buffer and 0 bytes written to server disk (`/out` and `/tmp`).
+  - **Exact Determinate Progress**: Two-phase ticketing protocol (`POST /prepare` $	o$ `GET /stream/{ticket}`) pre-calculates the exact byte length for `Content-Length`, ensuring native browser progress bars and ETAs.
+  - **Cross-Platform Compatibility**: Full PKWARE compliance with UTF-8 filename encoding (Bit 11 flag `0x0808`), Unix file attributes (`0o644`), automatic collision deduplication (`{name}_{msg_id}.ext`), and 32-bit local headers guaranteed to open cleanly in Windows Explorer, macOS Archive Utility, and Linux.
 
 ### Hardened Core & Security
 - **Single-Instance Process Locking**: Session-scoped lockfile engine (`.{stem}.pid`) with `os.O_CLOEXEC`, non-blocking flock deadline loop (4.0s timeout), and phantom inode validation (`st_dev` and `st_ino` verification on both acquisition and unlinking to protect against stale descriptor unlinking). Features PID recycling checks via `/proc/{pid}/cmdline` and `ps`, zombie detection (`State: Z`), and clean SIGTERM-to-SIGKILL termination of obsolete instances.

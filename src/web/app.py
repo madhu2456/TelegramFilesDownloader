@@ -10,6 +10,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from src.cli import get_client
 from src.config import Config, load_config, scrub_for_log
 from src.web.job_manager import JobManager
+from src.web.routes_direct import router as direct_router
 from src.web.routes_jobs import router as jobs_router
 from src.web.routes_media import router as media_router
 from src.web.routes_tg import router as tg_router
@@ -81,11 +82,17 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             if not verify_token(token):
                 return JSONResponse(status_code=401, content={"error": "UNAUTHORIZED", "detail": "Invalid or missing token"})
 
-        return await call_next(request)
+        response = await call_next(request)
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     app.include_router(jobs_router)
     app.include_router(tg_router)
     app.include_router(media_router)
+    app.include_router(direct_router)
 
     app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 

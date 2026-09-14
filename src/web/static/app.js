@@ -981,8 +981,10 @@ document.addEventListener('keydown', (e) => {
   const activeTag = document.activeElement ? document.activeElement.tagName : '';
   const twoFactorModal = document.getElementById('twoFactorModal');
   const mediaLightboxModal = document.getElementById('mediaLightboxModal');
+  const fileSelectorModal = document.getElementById('fileSelectorModal');
   const activeModal = (twoFactorModal && twoFactorModal.style.display !== 'none') ? twoFactorModal
                     : (mediaLightboxModal && mediaLightboxModal.style.display !== 'none') ? mediaLightboxModal
+                    : (fileSelectorModal && fileSelectorModal.style.display !== 'none') ? fileSelectorModal
                     : null;
   const isModalOpen = !!activeModal;
 
@@ -1017,6 +1019,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     closeTwoFactorModal();
     closeMediaLightbox();
+    closeFileSelectorModal();
   } else if (e.key === 'ArrowLeft') {
     if (document.getElementById('mediaLightboxModal')?.style.display !== 'none') {
       prevMediaLightbox();
@@ -1027,6 +1030,444 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// 11. Direct Browser File Extractor & Streaming
+let scannedFiles = [];
+let selectedFileIds = new Set();
+let scannedKindFilter = '';
+let scannedSearchText = '';
+let scanOffsetId = 0;
+let scanHasMore = false;
+let isScanning = false;
+let isBrowserDownloading = false;
+let abortBrowserDownload = false;
+let isPreparingZip = false;
+
+function openFileSelectorModal() {
+  const modal = document.getElementById('fileSelectorModal');
+  if (!modal) return;
+  window._lastActiveElement = document.activeElement;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const mainTarget = document.getElementById('targetInput')?.value.trim() || '';
+  const modalTarget = document.getElementById('modalTargetInput');
+  if (modalTarget && mainTarget) {
+    modalTarget.value = mainTarget;
+  }
+
+  const effectiveTarget = (modalTarget?.value || mainTarget).trim();
+  if (effectiveTarget) {
+    if (scannedFiles.length === 0 || modal.dataset.currentTarget !== effectiveTarget) {
+      modal.dataset.currentTarget = effectiveTarget;
+      scannedFiles = [];
+      selectedFileIds.clear();
+      scanOffsetId = 0;
+      scanHasMore = false;
+      runChatScan(effectiveTarget, 0);
+    } else {
+      renderScannedTable();
+    }
+  } else {
+    const tbody = document.getElementById('fileSelectorTbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.05rem; font-weight:600; margin-bottom:0.5rem; color:var(--text-main);">No Target Selected</div><div>Please enter a channel username (e.g. <code>@channel</code>) or link in the bar above and click <strong>Scan Media</strong>, or select a chat from the Chat Explorer on the left.</div></td></tr>';
+    }
+    setTimeout(() => modalTarget?.focus(), 50);
+  }
+}
+
+function triggerModalScan() {
+  const modalTarget = document.getElementById('modalTargetInput');
+  const target = modalTarget?.value.trim();
+  if (!target) {
+    showToast('Please enter a target chat or channel (@name, link, or ID).', 'warning', 'Target Required');
+    modalTarget?.focus();
+    return;
+  }
+  const mainTarget = document.getElementById('targetInput');
+  if (mainTarget) mainTarget.value = target;
+
+  const modal = document.getElementById('fileSelectorModal');
+  if (modal) modal.dataset.currentTarget = target;
+  scannedFiles = [];
+  selectedFileIds.clear();
+  scanOffsetId = 0;
+  scanHasMore = false;
+  runChatScan(target, 0);
+}
+
+function closeFileSelectorModal() {
+  const modal = document.getElementById('fileSelectorModal');
+  if (!modal || modal.style.display === 'none') return;
+  if (isBrowserDownloading) {
+    abortBrowserDownload = true;
+  }
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if (window._lastActiveElement && typeof window._lastActiveElement.focus === 'function') {
+    window._lastActiveElement.focus();
+  }
+}
+
+async function runChatScan(target, offsetId = 0) {
+  if (isScanning) return;
+  isScanning = true;
+  const tbody = document.getElementById('fileSelectorTbody');
+  if (offsetId === 0 && tbody) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--accent-cyan);"><div class="spinner-rotate" style="display:inline-block; width:18px; height:18px; border:2px solid var(--accent-cyan); border-top-color:transparent; border-radius:50%; margin-right:8px; vertical-align:middle;"></div>Scanning messages for media...</td></tr>';
+  }
+
+  const limitVal = parseInt(document.getElementById('limitInput')?.value, 10) || 100;
+  const filterVal = document.getElementById('filterSelect')?.value || '';
+  const searchVal = document.getElementById('searchInput')?.value.trim() || '';
+  const joinVal = document.getElementById('joinToggle')?.checked || false;
+
+  try {
+    const res = await fetch('/api/chat/scan', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        target: target,
+        limit: Math.min(limitVal, 200),
+        filter: filterVal || null,
+        search: searchVal || null,
+        offset_id: offsetId,
+        join: joinVal
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Scan failed');
+    }
+    const data = await res.json();
+    if (offsetId === 0) {
+      scannedFiles = data.items || [];
+    } else {
+      scannedFiles = scannedFiles.concat(data.items || []);
+    }
+    scanOffsetId = data.next_offset_id || 0;
+    scanHasMore = !!data.has_more;
+
+    const titleEl = document.getElementById('fileSelectorSubtitle');
+    if (titleEl) {
+      titleEl.textContent = `${data.chat_title || target} (${scannedFiles.length} files found)`;
+    }
+
+    const scanMoreBtn = document.getElementById('scanMoreBtn');
+    if (scanMoreBtn) {
+      scanMoreBtn.style.display = scanHasMore ? 'inline-block' : 'none';
+    }
+
+    renderScannedTable();
+    showToast(`Found ${data.count} media files.`, 'success', 'Scan Complete');
+  } catch (err) {
+    showToast(err.message, 'error', 'Scan Error');
+    if (offsetId === 0 && tbody) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--accent-crimson);">${escapeHtml(err.message)}</td></tr>`;
+    }
+  } finally {
+    isScanning = false;
+  }
+}
+
+function scanNextPage() {
+  const modal = document.getElementById('fileSelectorModal');
+  const target = (modal?.dataset.currentTarget || document.getElementById('modalTargetInput')?.value || document.getElementById('targetInput')?.value || '').trim();
+  if (target && scanOffsetId) {
+    runChatScan(target, scanOffsetId);
+  }
+}
+
+function filterScannedKind(kind) {
+  scannedKindFilter = kind;
+  ['All', 'Video', 'Photo', 'Audio', 'Doc'].forEach(k => {
+    const btn = document.getElementById(`fileFilter${k}`);
+    if (btn) {
+      const active = (k === 'All' && !kind) || (k.toLowerCase() === kind.toLowerCase()) || (k === 'Doc' && kind === 'document');
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active);
+    }
+  });
+  renderScannedTable();
+}
+
+function filterScannedSearch() {
+  const searchInput = document.getElementById('fileSelectorSearch');
+  scannedSearchText = (searchInput?.value || '').toLowerCase().trim();
+  renderScannedTable();
+}
+
+function renderScannedTable() {
+  const tbody = document.getElementById('fileSelectorTbody');
+  if (!tbody) return;
+
+  const filtered = scannedFiles.filter(item => {
+    if (scannedKindFilter && item.kind !== scannedKindFilter) return false;
+    if (scannedSearchText) {
+      const matchName = (item.name || '').toLowerCase().includes(scannedSearchText);
+      const matchCaption = (item.caption || '').toLowerCase().includes(scannedSearchText);
+      if (!matchName && !matchCaption) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">No matching media files found.</td></tr>';
+    updateSelectionCounter();
+    return;
+  }
+
+  const formatSize = (b) => {
+    if (!b) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+    return `${b.toFixed(1)} ${units[i]}`;
+  };
+
+  tbody.innerHTML = filtered.map(item => {
+    const isChecked = selectedFileIds.has(item.msg_id);
+    const dlUrl = `/api/direct/download/${item.chat_id}/${item.msg_id}?token=${encodeURIComponent(token)}`;
+    return `
+      <tr>
+        <td class="checkbox-cell">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFileSelection(${item.msg_id}, this.checked)" aria-label="Select ${escapeHtml(item.name)}">
+        </td>
+        <td style="max-width:380px;">
+          <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+          ${item.caption ? `<div style="font-size:0.75rem; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.caption)}</div>` : ''}
+        </td>
+        <td>
+          <span class="file-kind-badge file-kind-${item.kind}">${escapeHtml(item.kind)}</span>
+        </td>
+        <td style="font-family:var(--font-mono); white-space:nowrap;">
+          ${formatSize(item.size)}
+        </td>
+        <td style="text-align:right;">
+          <a href="${dlUrl}" class="file-action-btn" download="${escapeHtml(item.name)}" title="Download to Browser" aria-label="Download ${escapeHtml(item.name)}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </a>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  updateSelectionCounter();
+}
+
+function toggleFileSelection(msgId, checked) {
+  if (checked) {
+    selectedFileIds.add(msgId);
+  } else {
+    selectedFileIds.delete(msgId);
+  }
+  updateSelectionCounter();
+}
+
+function toggleSelectAll(checked) {
+  scannedFiles.forEach(item => {
+    if (checked) {
+      selectedFileIds.add(item.msg_id);
+    } else {
+      selectedFileIds.delete(item.msg_id);
+    }
+  });
+  renderScannedTable();
+}
+
+function updateSelectionCounter() {
+  const countEl = document.getElementById('fileSelectedCountText');
+  const btn = document.getElementById('downloadSelectedBtn');
+  const selectAll = document.getElementById('selectAllCheckbox');
+
+  let totalBytes = 0;
+  scannedFiles.forEach(item => {
+    if (selectedFileIds.has(item.msg_id)) {
+      totalBytes += (item.size || 0);
+    }
+  });
+
+  const formatSize = (b) => {
+    if (!b) return '0.0 MB';
+    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const count = selectedFileIds.size;
+  if (countEl) {
+    countEl.textContent = `Selected: ${count} files (${formatSize(totalBytes)})`;
+  }
+  if (btn) {
+    if (isBrowserDownloading) {
+      btn.disabled = false;
+      btn.className = 'btn btn-crimson';
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        Cancel Download
+      `;
+      btn.onclick = () => {
+        abortBrowserDownload = true;
+        showToast('Aborting browser downloads...', 'warning', 'Download Queue');
+      };
+    } else {
+      btn.className = 'btn btn-purple';
+      btn.disabled = (count === 0);
+      btn.onclick = downloadSelectedFilesToBrowser;
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Selected (${count})
+      `;
+    }
+  }
+  const zipBtn = document.getElementById('downloadZipBtn');
+  const zipBtnText = document.getElementById('downloadZipBtnText');
+  if (zipBtn && zipBtnText) {
+    if (isPreparingZip) {
+      zipBtn.disabled = true;
+      zipBtnText.innerHTML = '<span class="spinner-rotate" style="display:inline-block; width:14px; height:14px; border:2px solid #0B0E14; border-top-color:transparent; border-radius:50%; margin-right:6px; vertical-align:middle;"></span> Preparing ZIP...';
+    } else if (selectedFileIds.size > 0) {
+      zipBtn.disabled = false;
+      zipBtnText.textContent = `Download as ZIP (${selectedFileIds.size} files)`;
+    } else if (scannedFiles.length > 0) {
+      zipBtn.disabled = false;
+      zipBtnText.textContent = `Download All as ZIP (${scannedFiles.length} files)`;
+    } else {
+      zipBtn.disabled = true;
+      zipBtnText.textContent = 'Download as ZIP';
+    }
+  }
+
+  if (selectAll) {
+    selectAll.checked = (scannedFiles.length > 0 && count === scannedFiles.length);
+    selectAll.indeterminate = (count > 0 && count < scannedFiles.length);
+  }
+}
+
+async function downloadSelectedFilesToBrowser() {
+  const selectedItems = scannedFiles.filter(item => selectedFileIds.has(item.msg_id));
+  if (selectedItems.length === 0 || isBrowserDownloading) return;
+
+  isBrowserDownloading = true;
+  abortBrowserDownload = false;
+  updateSelectionCounter();
+
+  showToast(`Initiating download for ${selectedItems.length} files...`, 'info', 'Browser Downloads');
+
+  for (let i = 0; i < selectedItems.length; i++) {
+    if (abortBrowserDownload) {
+      showToast('Browser download sequence aborted.', 'warning', 'Aborted');
+      break;
+    }
+    const item = selectedItems[i];
+    const dlUrl = `/api/direct/download/${item.chat_id}/${item.msg_id}?token=${encodeURIComponent(token)}`;
+
+    // Create an invisible anchor to trigger browser download
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = dlUrl;
+    a.download = item.name || `file_${item.chat_id}_${item.msg_id}`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 1000);
+
+    // Stagger downloads by 750ms to allow browser download manager to register without popup block
+    if (i < selectedItems.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 750));
+    }
+  }
+
+  isBrowserDownloading = false;
+  updateSelectionCounter();
+  if (!abortBrowserDownload) {
+    showToast(`Completed initiating ${selectedItems.length} browser downloads.`, 'success', 'Downloads Dispatched');
+  }
+}
+
+async function downloadSelectedFilesAsZip() {
+  if (isPreparingZip) return;
+
+  let msgIds = [];
+  if (selectedFileIds.size > 0) {
+    msgIds = Array.from(selectedFileIds);
+  } else if (scannedFiles.length > 0) {
+    msgIds = scannedFiles.map(f => f.msg_id);
+  } else {
+    showToast('No files available to package into ZIP.', 'warning', 'ZIP Download');
+    return;
+  }
+
+  const chatId = scannedFiles[0]?.chat_id;
+  if (!chatId) {
+    showToast('Cannot determine chat ID for ZIP download.', 'error', 'ZIP Error');
+    return;
+  }
+
+  console.log('[TeleVault] downloadSelectedFilesAsZip triggered', { selectedCount: selectedFileIds.size, scannedCount: scannedFiles.length, chatId });
+  showToast('Preparing ZIP download ticket...', 'info', 'ZIP Download');
+
+  const subtitleEl = document.getElementById('fileSelectorSubtitle');
+  let chatTitle = subtitleEl ? subtitleEl.textContent.split('(')[0].trim() : '';
+  if (!chatTitle) {
+    chatTitle = document.getElementById('modalTargetInput')?.value.trim() || document.getElementById('targetInput')?.value.trim() || String(chatId);
+  }
+
+  const zipBtn = document.getElementById('downloadZipBtn');
+  const zipBtnText = document.getElementById('downloadZipBtnText');
+
+  isPreparingZip = true;
+  if (zipBtn) zipBtn.disabled = true;
+  if (zipBtnText) {
+    zipBtnText.innerHTML = '<span class="spinner-rotate" style="display:inline-block; width:14px; height:14px; border:2px solid #0B0E14; border-top-color:transparent; border-radius:50%; margin-right:6px; vertical-align:middle;"></span> Preparing ZIP...';
+  }
+
+  const formatSize = (b) => {
+    if (!b) return '0.0 MB';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let val = b;
+    while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+    return `${val.toFixed(1)} ${units[i]}`;
+  };
+
+  try {
+    const res = await fetch('/api/direct/zip/prepare', {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        chat_id: chatId,
+        msg_ids: msgIds,
+        chat_title: chatTitle,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      showToast(err.detail || 'Failed to prepare ZIP archive', 'error', 'ZIP Error');
+      return;
+    }
+
+    const data = await res.json();
+    const { ticket, suggested_filename, file_count, archive_size } = data;
+
+    const zipUrl = `/api/direct/zip/stream/${ticket}?token=${encodeURIComponent(token)}`;
+    console.log('[TeleVault] Starting ZIP download stream:', zipUrl);
+
+    // Single-trigger: invisible iframe guarantees download initiation without popup blocker drops or duplicate downloads
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = zipUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => iframe.remove(), 60000);
+
+    showToast(`Streaming ${file_count} files as single ZIP (${formatSize(archive_size)}). Check your browser download shelf!`, 'success', 'Single ZIP Download Started');
+  } catch (err) {
+    console.error('[TeleVault] ZIP download failed:', err);
+    showToast(err.message || 'Error communicating with server', 'error', 'ZIP Error');
+  } finally {
+    isPreparingZip = false;
+    updateSelectionCounter();
+  }
+}
 
 // Event delegations
 document.addEventListener('DOMContentLoaded', () => {
