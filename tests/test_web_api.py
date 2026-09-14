@@ -943,3 +943,83 @@ def test_job_manager_run_job_failure_state(tmp_path: Path):
     assert "FAILED" in received_types
 
 
+def test_ui_tooltips_structural_audit():
+    """Verify DOM structure, IDs, accessibility roles, and decoupling for all 19 tooltips."""
+    from html.parser import HTMLParser
+    from typing import Any
+
+    class TooltipDOMParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tag_stack: list[str] = []
+            self.tooltips: list[dict[str, str | None]] = []
+            self.triggers: list[dict[str, Any]] = []
+            self.triggers_inside_label: list[dict[str, Any]] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            attr_dict = dict(attrs)
+            classes = (attr_dict.get("class") or "").split()
+
+            if "tooltip-bubble" in classes:
+                self.tooltips.append({
+                    "id": attr_dict.get("id"),
+                    "role": attr_dict.get("role"),
+                    "class": attr_dict.get("class"),
+                })
+
+            if "tooltip-trigger" in classes:
+                trigger_info = {
+                    "tag": tag,
+                    "type": attr_dict.get("type"),
+                    "aria_label": attr_dict.get("aria-label"),
+                    "aria_describedby": attr_dict.get("aria-describedby"),
+                    "inside_label": "label" in self.tag_stack,
+                }
+                self.triggers.append(trigger_info)
+                if "label" in self.tag_stack:
+                    self.triggers_inside_label.append(trigger_info)
+
+            if tag.lower() not in (
+                "area", "base", "br", "col", "embed", "hr", "img",
+                "input", "link", "meta", "param", "source", "track", "wbr",
+            ):
+                self.tag_stack.append(tag.lower())
+
+        def handle_endtag(self, tag: str) -> None:
+            tag_lower = tag.lower()
+            if tag_lower in self.tag_stack:
+                while self.tag_stack:
+                    popped = self.tag_stack.pop()
+                    if popped == tag_lower:
+                        break
+
+    html_path = Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "index.html"
+    assert html_path.exists(), f"File not found: {html_path}"
+    content = html_path.read_text(encoding="utf-8")
+
+    parser = TooltipDOMParser()
+    parser.feed(content)
+
+    expected_ids = {
+        "tip-phone", "tip-code", "tip-target", "tip-limit", "tip-no-limit",
+        "tip-filter", "tip-search", "tip-after", "tip-before", "tip-from-user",
+        "tip-sync", "tip-resume", "tip-dry-run", "tip-takeout", "tip-join",
+        "tip-2fa", "tip-modal-target", "tip-modal-search", "tip-select-all",
+    }
+
+    assert len(parser.tooltips) == 19, f"Expected 19 tooltips, found {len(parser.tooltips)}"
+    found_ids = {t["id"] for t in parser.tooltips}
+    assert found_ids == expected_ids, (
+        f"Tooltip ID mismatch. Missing: {expected_ids - found_ids}, Extra: {found_ids - expected_ids}"
+    )
+    for t in parser.tooltips:
+        assert t["role"] == "tooltip", f"Tooltip {t['id']} does not have role='tooltip': {t}"
+    assert len(parser.triggers) == 19, f"Expected 19 triggers, found {len(parser.triggers)}"
+    for tr in parser.triggers:
+        assert tr["tag"] == "button", f"Trigger tag is not button: {tr}"
+        assert tr["type"] == "button", f"Trigger missing type='button': {tr}"
+        assert tr["aria_label"] and tr["aria_label"].strip(), f"Trigger missing non-empty aria-label: {tr}"
+        assert tr["aria_describedby"] in expected_ids, f"Trigger aria-describedby not in expected IDs: {tr}"
+    assert len(parser.triggers_inside_label) == 0, (
+        f"Found tooltip triggers nested inside <label>: {parser.triggers_inside_label}"
+    )

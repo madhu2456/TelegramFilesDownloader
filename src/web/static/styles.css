@@ -335,7 +335,7 @@ input:focus, select:focus {
 /* Linear-Grade Toggle Switches */
 .toggle-group-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 0.75rem;
   margin: 1rem 0;
   padding: 0.85rem;
@@ -1212,4 +1212,158 @@ input:focus, select:focus {
 .file-action-btn:hover {
   background: rgba(0, 229, 255, 0.15);
   color: #fff;
+}
+
+/* Contextual "i" Info Tooltip Component */
+.label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.label-row label {
+  margin-bottom: 0;
+}
+
+.tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.tooltip-wrapper:hover,
+.tooltip-wrapper:focus-within,
+.tooltip-wrapper.active {
+  z-index: 120;
+}
+
+.tooltip-trigger {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 3px;
+  margin: 0;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.tooltip-trigger:hover,
+.tooltip-wrapper.active .tooltip-trigger {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 8px var(--accent-cyan-glow);
+}
+
+.tooltip-trigger:focus-visible {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 8px var(--accent-cyan-glow);
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+.tooltip-bubble {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #1E293B;
+  color: #F8FAFC;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 229, 255, 0.1);
+  white-space: normal;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  min-width: 150px;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.18s;
+  z-index: 120;
+}
+
+/* Upward caret arrow pointing to trigger */
+.tooltip-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #1E293B transparent;
+}
+
+/* Hover bridge so moving cursor downwards from trigger to bubble doesn't close tooltip */
+.tooltip-bubble::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: 8px;
+}
+
+/* Right-aligned bubble (for controls near viewport right edge) */
+.tooltip-bubble.align-right {
+  left: auto;
+  right: -6px;
+  transform: translateY(-4px);
+}
+
+.tooltip-bubble.align-right::after {
+  left: auto;
+  right: 12px;
+  transform: none;
+}
+
+/* Trigger states */
+.tooltip-wrapper:hover .tooltip-bubble,
+.tooltip-wrapper:focus-within .tooltip-bubble,
+.tooltip-wrapper.active .tooltip-bubble {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tooltip-wrapper:hover .tooltip-bubble.align-right,
+.tooltip-wrapper:focus-within .tooltip-bubble.align-right,
+.tooltip-wrapper.active .tooltip-bubble.align-right {
+  transform: translateY(0);
+}
+
+/* Toggle item container for SIBLING DECOUPLING */
+.toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.1rem 0.2rem;
+}
+
+.toggle-item .toggle-switch {
+  flex: 1;
+  min-width: 0;
 }

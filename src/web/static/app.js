@@ -1017,6 +1017,12 @@ document.addEventListener('keydown', (e) => {
     const search = document.getElementById('dialogSearch');
     if (search) search.focus();
   } else if (e.key === 'Escape') {
+    const activeTip = document.querySelector('.tooltip-wrapper.active');
+    if (activeTip) {
+      activeTip.classList.remove('active');
+      activeTip.querySelector('.tooltip-trigger')?.setAttribute('aria-expanded', 'false');
+      return;
+    }
     closeTwoFactorModal();
     closeMediaLightbox();
     closeFileSelectorModal();
@@ -1471,6 +1477,32 @@ async function downloadSelectedFilesAsZip() {
 
 // Event delegations
 document.addEventListener('DOMContentLoaded', () => {
+  // Contextual Tooltips tap-to-toggle & click-outside dismissal
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('.tooltip-trigger');
+    const activeWrappers = document.querySelectorAll('.tooltip-wrapper.active');
+
+    if (trigger) {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = trigger.closest('.tooltip-wrapper');
+      const isAlreadyActive = wrapper?.classList.contains('active');
+      activeWrappers.forEach(w => {
+        w.classList.remove('active');
+        w.querySelector('.tooltip-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+      if (wrapper && !isAlreadyActive) {
+        wrapper.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+    } else if (!e.target.closest('.tooltip-bubble')) {
+      activeWrappers.forEach(w => {
+        w.classList.remove('active');
+        w.querySelector('.tooltip-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+    }
+  });
+
   document.getElementById('dialogList')?.addEventListener('click', (e) => {
     const item = e.target.closest('[data-target]');
     if (item && item.dataset.target) {

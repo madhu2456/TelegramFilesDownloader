@@ -41,13 +41,13 @@
         </div>
         <div id="phoneAuthTab" role="tabpanel" aria-labelledby="tabBtnPhone">
           <div class="input-group">
-            <label for="phoneInput">Phone Number (E.164 format)</label>
+            <div class="label-row"><label for="phoneInput">Phone Number (E.164 format)</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Phone number info" aria-describedby="tip-phone"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-phone" class="tooltip-bubble">Telegram phone number with country code in E.164 format (e.g. +15551234567).</div></div></div>
             <input type="tel" id="phoneInput" placeholder="+15551234567" autocomplete="tel">
           </div>
           <button class="btn btn-cyan" onclick="sendPhoneCode()" style="width:100%">Send Verification Code</button>
           <div id="codeSection" style="display:none; margin-top:1rem;">
             <div class="input-group">
-              <label for="codeInput">Telegram Code</label>
+              <div class="label-row"><label for="codeInput">Telegram Code</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Verification code info" aria-describedby="tip-code"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-code" class="tooltip-bubble">5-digit verification code sent to your active Telegram account sessions.</div></div></div>
               <input type="text" id="codeInput" placeholder="12345" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" onkeydown="if(event.key==='Enter') signInWithCode()">
             </div>
             <button class="btn btn-cyan" onclick="signInWithCode()" style="width:100%">Sign In</button>
@@ -89,23 +89,29 @@
         </h2>
         <div class="form-row-2-1">
           <div class="input-group">
-            <label for="targetInput">Target (@channel, t.me/link, ID, phone)</label>
+            <div class="label-row"><label for="targetInput">Target (@channel, t.me/link, ID, phone)</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Target format info" aria-describedby="tip-target"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-target" class="tooltip-bubble">Channel username (@channel), t.me invite link, numeric chat ID, or phone number.</div></div></div>
             <input type="text" id="targetInput" placeholder="@my_channel or t.me/c/12345">
           </div>
           <div class="input-group">
             <div class="label-header" style="display:flex; justify-content:space-between; align-items:center;">
-              <label for="limitInput">Message Limit</label>
-              <label class="toggle-switch-label" style="font-size:12px; font-weight:normal; display:flex; align-items:center; gap:6px; cursor:pointer;">
-                <input type="checkbox" id="noLimitToggle" onchange="toggleNoLimit(this.checked)">
-                <span style="color:var(--accent-cyan); font-weight:500;">No Limit (All)</span>
-              </label>
+              <div class="label-row" style="margin-bottom:0;">
+                <label for="limitInput">Message Limit</label>
+                <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Message limit info" aria-describedby="tip-limit"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-limit" class="tooltip-bubble align-right">Maximum number of messages to scan or download from this chat.</div></div>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <label class="toggle-switch-label" style="font-size:12px; font-weight:normal; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input type="checkbox" id="noLimitToggle" onchange="toggleNoLimit(this.checked)">
+                  <span style="color:var(--accent-cyan); font-weight:500;">No Limit (All)</span>
+                </label>
+                <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Unlimited mode info" aria-describedby="tip-no-limit"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-no-limit" class="tooltip-bubble align-right">Scan entire channel history without message count cap.</div></div>
+              </div>
             </div>
             <input type="number" id="limitInput" value="100" min="1" placeholder="e.g. 100 or toggle No Limit">
           </div>
         </div>
         <div class="form-row-1-1">
           <div class="input-group">
-            <label for="filterSelect">Media Filter</label>
+            <div class="label-row"><label for="filterSelect">Media Filter</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Media filter info" aria-describedby="tip-filter"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-filter" class="tooltip-bubble">Filter media by type: Video, Photo, Audio, or Documents.</div></div></div>
             <select id="filterSelect">
               <option value="">All Media</option>
               <option value="video">Video</option>
@@ -115,7 +121,7 @@
             </select>
           </div>
           <div class="input-group">
-            <label for="searchInput">Search Keyword</label>
+            <div class="label-row"><label for="searchInput">Search Keyword</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Search keyword info" aria-describedby="tip-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-search" class="tooltip-bubble align-right">Search query to filter messages by text or caption.</div></div></div>
             <input type="text" id="searchInput" placeholder="Optional keyword filter...">
           </div>
         </div>
@@ -126,46 +132,61 @@
         </div>
         <div id="advFiltersPanel" class="advanced-filters-panel" style="display:none;">
           <div class="input-group">
-            <label for="afterInput">After (ISO/UTC)</label>
+            <div class="label-row"><label for="afterInput">After (ISO/UTC)</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="After date info" aria-describedby="tip-after"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-after" class="tooltip-bubble">Only download messages sent on or after this UTC date (YYYY-MM-DD).</div></div></div>
             <input type="text" id="afterInput" placeholder="2024-01-01">
           </div>
           <div class="input-group">
-            <label for="beforeInput">Before (ISO/UTC)</label>
+            <div class="label-row"><label for="beforeInput">Before (ISO/UTC)</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Before date info" aria-describedby="tip-before"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-before" class="tooltip-bubble">Only download messages sent on or before this UTC date (YYYY-MM-DD).</div></div></div>
             <input type="text" id="beforeInput" placeholder="2025-01-01">
           </div>
           <div class="input-group">
-            <label for="fromUserInput">From User</label>
+            <div class="label-row"><label for="fromUserInput">From User</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="From user info" aria-describedby="tip-from-user"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-from-user" class="tooltip-bubble align-right">Filter messages sent by a specific user username or numeric ID.</div></div></div>
             <input type="text" id="fromUserInput" placeholder="@username or ID">
           </div>
         </div>
 
         <!-- Linear-Style Hardened CLI Toggle Switches -->
         <div class="toggle-group-grid">
-          <label class="toggle-switch">
-            <input type="checkbox" id="syncToggle" checked>
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Sync Mode</span>
-          </label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="resumeToggle" checked>
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Resume .part</span>
-          </label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="dryRunToggle">
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Dry Run</span>
-          </label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="takeoutToggle">
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Takeout Session</span>
-          </label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="joinToggle">
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">Auto-Join</span>
-          </label>
+          <div class="toggle-item">
+            <label class="toggle-switch">
+              <input type="checkbox" id="syncToggle" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Sync Mode</span>
+            </label>
+            <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Sync mode info" aria-describedby="tip-sync"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-sync" class="tooltip-bubble">Sync mode: incremental downloads tracking the latest message checkpoint in SQLite.</div></div>
+          </div>
+          <div class="toggle-item">
+            <label class="toggle-switch">
+              <input type="checkbox" id="resumeToggle" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Resume .part</span>
+            </label>
+            <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Resume mode info" aria-describedby="tip-resume"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-resume" class="tooltip-bubble">Resume incomplete downloads from existing .part files.</div></div>
+          </div>
+          <div class="toggle-item">
+            <label class="toggle-switch">
+              <input type="checkbox" id="dryRunToggle">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Dry Run</span>
+            </label>
+            <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Dry run info" aria-describedby="tip-dry-run"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-dry-run" class="tooltip-bubble">Simulate downloads and log metadata without saving files to disk.</div></div>
+          </div>
+          <div class="toggle-item">
+            <label class="toggle-switch">
+              <input type="checkbox" id="takeoutToggle">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Takeout Session</span>
+            </label>
+            <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Takeout info" aria-describedby="tip-takeout"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-takeout" class="tooltip-bubble">Telegram Takeout session with higher rate limits for large data exports.</div></div>
+          </div>
+          <div class="toggle-item">
+            <label class="toggle-switch">
+              <input type="checkbox" id="joinToggle">
+              <span class="toggle-slider"></span>
+              <span class="toggle-label">Auto-Join</span>
+            </label>
+            <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Auto join info" aria-describedby="tip-join"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-join" class="tooltip-bubble align-right">Automatically join public channel or group if not already a member.</div></div>
+          </div>
         </div>
 
         <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-top:0.75rem;">
@@ -267,7 +288,7 @@
         Your Telegram account requires an additional cloud password to authenticate.
       </p>
       <div class="input-group">
-        <label for="twoFactorInput">Cloud Password</label>
+        <div class="label-row"><label for="twoFactorInput">Cloud Password</label><div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Two-factor password info" aria-describedby="tip-2fa"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-2fa" class="tooltip-bubble">Your Telegram Cloud Password for 2-step verification.</div></div></div>
         <div style="position:relative;">
           <input type="password" id="twoFactorInput" placeholder="Enter your 2FA password" onkeydown="if(event.key==='Enter') submitTwoFactorPassword()">
           <button type="button" class="eye-toggle-btn" onclick="togglePasswordVisibility('twoFactorInput', this)" title="Show/Hide Password" aria-label="Show or hide password">
@@ -335,10 +356,13 @@
 
       <!-- Target Input & Scan Trigger Row -->
       <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; margin-top:0.75rem; padding:0.6rem 0.8rem; background:rgba(0,0,0,0.25); border:1px solid var(--border-glass); border-radius:8px;">
-        <label for="modalTargetInput" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); margin:0; display:flex; align-items:center; gap:0.4rem;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
-          Chat / Channel:
-        </label>
+        <div class="label-row" style="margin:0;">
+          <label for="modalTargetInput" style="font-size:0.8rem; font-weight:600; color:var(--text-muted); margin:0; display:flex; align-items:center; gap:0.4rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            Chat / Channel:
+          </label>
+          <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Modal target info" aria-describedby="tip-modal-target"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-modal-target" class="tooltip-bubble">Target channel or chat to inspect for media files.</div></div>
+        </div>
         <input type="text" id="modalTargetInput" placeholder="@channel, t.me/link, or ID" style="flex:1; min-width:200px; padding:0.45rem 0.75rem; font-size:0.85rem;" onkeydown="if(event.key==='Enter') triggerModalScan()">
         <button class="btn btn-purple" id="modalScanTriggerBtn" onclick="triggerModalScan()" style="padding:0.45rem 1rem; font-size:0.85rem;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -356,7 +380,10 @@
           <button class="tab-btn" id="fileFilterDoc" role="tab" aria-selected="false" onclick="filterScannedKind('document')">Docs</button>
         </div>
         <div style="display:flex; align-items:center; gap:0.5rem; flex:1; max-width:320px;">
-          <input type="search" id="fileSelectorSearch" placeholder="Filter scanned files..." oninput="filterScannedSearch()" style="padding:0.45rem 0.75rem; font-size:0.85rem;">
+          <div style="display:inline-flex; align-items:center; gap:6px; flex:1; width:100%;">
+          <input type="search" id="fileSelectorSearch" placeholder="Filter scanned files..." oninput="filterScannedSearch()" style="padding:0.45rem 0.75rem; font-size:0.85rem; flex:1;">
+          <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Modal filter search info" aria-describedby="tip-modal-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-modal-search" class="tooltip-bubble align-right">Live filter scanned file names and captions in the table.</div></div>
+        </div>
         </div>
       </div>
 
@@ -366,7 +393,10 @@
           <thead>
             <tr>
               <th class="checkbox-cell">
-                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" title="Select All" aria-label="Select all files">
+                <div style="display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                  <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" title="Select All" aria-label="Select all files">
+                  <div class="tooltip-wrapper"><button type="button" class="tooltip-trigger" aria-label="Select all info" aria-describedby="tip-select-all"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button><div role="tooltip" id="tip-select-all" class="tooltip-bubble">Select or deselect all visible media files in the list.</div></div>
+                </div>
               </th>
               <th>Filename &amp; Caption</th>
               <th>Type</th>
@@ -408,6 +438,6 @@
   <!-- Global Floating Toast Stack Container -->
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-  <script src="/static/app.js?v=0.4.5"></script>
+  <script src="/static/app.js?v=0.4.6"></script>
 </body>
 </html>
