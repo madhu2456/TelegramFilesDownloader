@@ -34,19 +34,33 @@ def verify_token(token: str | None) -> bool:
     return hmac.compare_digest(str(token), str(_ACTIVE_TOKEN))
 
 def verify_origin(origin: str | None, port: int) -> bool:
-    """Verify that Origin header matches 127.0.0.1, localhost, or [::1] on the specified port.
+    """Verify that Origin header matches 127.0.0.1, localhost, [::1], televault.madhudadi.in,
+    or TELEVAULT_ALLOWED_HOSTS.
     If origin is None, returns True for same-origin direct calls.
     """
     if origin is None:
         return True
     try:
         parsed = urlparse(origin)
-        allowed_hosts = {"127.0.0.1", "localhost", "::1", "[::1]"}
         host = parsed.hostname
         if not host:
             return False
+        h_lower = host.lower()
+        loopback_hosts = {"127.0.0.1", "localhost", "::1", "[::1]"}
+        custom_hosts = {
+            h.strip().lower()
+            for h in os.getenv("TELEVAULT_ALLOWED_HOSTS", "").split(",")
+            if h.strip()
+        }
+        allowed_domains = {"televault.madhudadi.in"}.union(custom_hosts)
         p = parsed.port or (80 if parsed.scheme == "http" else 443)
-        return host.lower() in allowed_hosts and p == port
+
+        if h_lower in loopback_hosts:
+            return p == port
+        if h_lower in allowed_domains:
+            # Reverse proxy TLS port 443, standard 80, or active port
+            return p in (443, 80, port)
+        return False
     except Exception:
         return False
 

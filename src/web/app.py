@@ -1,5 +1,6 @@
 """FastAPI application factory with ephemeral security, origin validation, and static serving."""
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -51,10 +52,9 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 pass
 
     app = FastAPI(title="TeleVault Web Dashboard", lifespan=lifespan)
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
-    )
+    default_hosts = ["127.0.0.1", "localhost", "[::1]", "testserver", "televault.madhudadi.in"]
+    extra_hosts = [h.strip() for h in os.getenv("TELEVAULT_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    allowed_hosts = list(dict.fromkeys(default_hosts + extra_hosts))
     app.state.job_manager = JobManager()
     app.state.out_dir = "out"
     app.state.config = cfg
@@ -88,6 +88,11 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
+
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=allowed_hosts,
+    )
 
     app.include_router(jobs_router)
     app.include_router(tg_router)

@@ -1023,3 +1023,39 @@ def test_ui_tooltips_structural_audit():
     assert len(parser.triggers_inside_label) == 0, (
         f"Found tooltip triggers nested inside <label>: {parser.triggers_inside_label}"
     )
+
+
+def test_production_host_and_origin_validation(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg)
+    client = TestClient(app)
+
+    # 1. Host header validation
+    # Allowed host: televault.madhudadi.in
+    res = client.get("/api/status", headers={"Host": "televault.madhudadi.in"})
+    assert res.status_code in (200, 401)
+
+    # Disallowed host returns 400 Invalid host header
+    res = client.get("/api/status", headers={"Host": "evil.com"})
+    assert res.status_code == 400
+
+    # 2. Origin verification function
+    assert verify_origin("https://televault.madhudadi.in", 8000) is True
+    assert verify_origin("http://televault.madhudadi.in", 8000) is True
+    assert verify_origin("https://televault.madhudadi.in:443", 8000) is True
+    assert verify_origin("https://evil.com", 8000) is False
+    assert verify_origin("https://sub.televault.madhudadi.in", 8000) is False
+
+    # 3. WebSocket origin check with production domain
+    token = get_ephemeral_token()
+    with client.websocket_connect(
+        f"/ws/live?token={token}",
+        headers={"Origin": "https://televault.madhudadi.in"}
+    ) as ws:
+        data = ws.receive_json()
+        assert data["type"] == "INIT_STATE"

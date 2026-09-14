@@ -45,7 +45,8 @@ def main():
     except Exception as e:
         print(f"[TeleVault] Instance lock note: {e}")
 
-    port = find_available_port(8000, 50)
+    env_port = int(os.getenv("TELEVAULT_PORT", "0") or 0)
+    port = env_port if env_port > 0 else find_available_port(8000, 50)
     token = generate_ephemeral_token()
     url = f"http://127.0.0.1:{port}/?token={token}"
     print("=" * 60)
@@ -54,13 +55,24 @@ def main():
     print(" Ephemeral startup token generated and active.")
     print("=" * 60)
 
-    def _open_browser():
-        time.sleep(0.6)
-        webbrowser.open(url)
+    headless = bool(os.getenv("TELEVAULT_HEADLESS") or os.getenv("DISPLAY") is None)
+    if not headless:
+        def _open_browser():
+            time.sleep(0.6)
+            webbrowser.open(url)
 
-    threading.Thread(target=_open_browser, daemon=True).start()
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+    bind_host = os.getenv("TELEVAULT_BIND_HOST", "127.0.0.1")
     app = create_app()
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(
+        app,
+        host=bind_host,
+        port=port,
+        log_level="info",
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+    )
 
 if __name__ == "__main__":
     main()
