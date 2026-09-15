@@ -3,8 +3,11 @@ import getpass
 import logging
 import os
 from pathlib import Path
+
 from telethon.errors import SessionPasswordNeededError
+
 from .config import scrub_for_log
+
 log = logging.getLogger(__name__)
 def ensure_session_file(p) -> Path:
     path = Path(p)

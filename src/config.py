@@ -3,7 +3,9 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 os.umask(0o077)
 _HINT = "Get api_id/api_hash at https://my.telegram.org"
 _REDACT = {"api_hash", "phone", "code", "auth_key", "qr_token"}
@@ -11,17 +13,14 @@ _REDACT = {"api_hash", "phone", "code", "auth_key", "qr_token"}
 
 class ConfigError(Exception):
     """Base domain exception for configuration errors."""
-    pass
 
 
 class InvalidConfigError(ConfigError):
     """Raised when configuration values are invalid or missing."""
-    pass
 
 
 class UnsafeDirectoryError(ConfigError):
     """Raised when an output directory is unsafe."""
-    pass
 
 
 @dataclass
@@ -59,6 +58,12 @@ def load_config(dotenv_path=None) -> Config:
         api_id = int(str(os.getenv("TG_API_ID", "")).strip())
     except ValueError:
         raise InvalidConfigError(f"Invalid TG_API_ID: {_HINT}")
-    cfg = Config(api_id, str(os.getenv("TG_API_HASH", "")).strip(), str(os.getenv("TG_PHONE", "")).strip(), Path(os.getenv("TG_SESSION", "session/telegram.session") or "session/telegram.session"))
+    session_target = os.getenv("TG_SESSION", "session/telegram.session") or "session/telegram.session"
+    cfg = Config(
+        api_id,
+        str(os.getenv("TG_API_HASH", "")).strip(),
+        str(os.getenv("TG_PHONE", "")).strip(),
+        Path(session_target),
+    )
     validate_config(cfg)
     return cfg
