@@ -1,5 +1,6 @@
 """Unit tests for direct browser scanning and streaming endpoints without disk writes."""
 from datetime import datetime, timezone
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -178,7 +179,7 @@ def test_direct_download_streaming_zero_disk(direct_client):
 
 
 def test_direct_download_utf8_filename(direct_client):
-    client, token, tmp_path = direct_client
+    client, token, _ = direct_client
     client.app.state.tg_client.messages.append(
         MockMessage(106, name="Special & Symbols € 2026.pdf", size=1200, mime_type="application/pdf")
     )

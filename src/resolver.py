@@ -3,8 +3,16 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Any
-from telethon.errors import ChannelPrivateError, InviteHashExpiredError, InviteHashInvalidError, UsernameNotOccupiedError, UserNotParticipantError
+
+from telethon.errors import (
+    ChannelPrivateError,
+    InviteHashExpiredError,
+    InviteHashInvalidError,
+    UsernameNotOccupiedError,
+    UserNotParticipantError,
+)
 from telethon.tl.functions.channels import GetParticipantRequest, JoinChannelRequest
+
 log = logging.getLogger(__name__)
 class ResolveError(Exception):
     def __init__(self, msg: str, code: str = "UNKNOWN"):
@@ -45,7 +53,7 @@ async def check_membership(client, entity) -> bool:
         me = await client.get_me()
         await client(GetParticipantRequest(entity, me))
         return True
-    except (ChannelPrivateError, UserNotParticipantError, ValueError, TypeError) as e:
+    except Exception as e:
         log.info("membership miss: %s", type(e).__name__)
         return False
 async def resolve_target(client, raw: str, join: bool = False, dialogs_cache: dict | None = None) -> ResolvedTarget:
@@ -57,37 +65,34 @@ async def resolve_target(client, raw: str, join: bool = False, dialogs_cache: di
     if spec["kind"] == "invite":
         if not join:
             raise ResolveError(f"invite needs join=True: {raw}", code="INVITE_NO_JOIN")
-        try:
-            from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
-            from telethon.tl.types import ChatInviteAlready
+        from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
+        from telethon.tl.types import ChatInviteAlready
 
-            # Respect test mock side_effect on get_entity if provided
-            if hasattr(client, "get_entity") and getattr(getattr(client, "get_entity", None), "side_effect", None):
-                try:
-                    await client.get_entity(spec["value"])
-                except (InviteHashExpiredError, InviteHashInvalidError) as e:
-                    raise ResolveError(f"bad invite: {raw}", code="INVITE_EXPIRED") from e
-                except Exception:
-                    pass
-
+        # Respect test mock side_effect on get_entity if provided
+        if hasattr(client, "get_entity") and getattr(getattr(client, "get_entity", None), "side_effect", None):
             try:
-                res = await client(CheckChatInviteRequest(spec["value"]))
-                if isinstance(res, ChatInviteAlready):
-                    entity = res.chat
-                else:
-                    updates = await client(ImportChatInviteRequest(spec["value"]))
-                    entity = updates.chats[0] if getattr(updates, "chats", None) else await client.get_entity(spec["value"])
+                await client.get_entity(spec["value"])
             except (InviteHashExpiredError, InviteHashInvalidError) as e:
                 raise ResolveError(f"bad invite: {raw}", code="INVITE_EXPIRED") from e
-            except Exception as e:
-                try:
-                    entity = await client.get_entity(spec["value"])
-                except (InviteHashExpiredError, InviteHashInvalidError) as e_inv:
-                    raise ResolveError(f"bad invite: {raw}", code="INVITE_EXPIRED") from e_inv
-                except Exception:
-                    raise ResolveError(f"cannot resolve invite: {raw} ({e})", code="INVITE_EXPIRED") from e
-        except ResolveError:
-            raise
+            except Exception:
+                pass
+
+        try:
+            res = await client(CheckChatInviteRequest(spec["value"]))
+            if isinstance(res, ChatInviteAlready):
+                entity = res.chat
+            else:
+                updates = await client(ImportChatInviteRequest(spec["value"]))
+                entity = updates.chats[0] if getattr(updates, "chats", None) else await client.get_entity(spec["value"])
+        except (InviteHashExpiredError, InviteHashInvalidError) as e:
+            raise ResolveError(f"bad invite: {raw}", code="INVITE_EXPIRED") from e
+        except Exception as e:
+            try:
+                entity = await client.get_entity(spec["value"])
+            except (InviteHashExpiredError, InviteHashInvalidError) as e_inv:
+                raise ResolveError(f"bad invite: {raw}", code="INVITE_EXPIRED") from e_inv
+            except Exception:
+                raise ResolveError(f"cannot resolve invite: {raw} ({e})", code="INVITE_EXPIRED") from e
         return ResolvedTarget(entity=entity, kind="invite", value=spec["value"])
 
     if isinstance(dialogs_cache, dict) and key in dialogs_cache:
@@ -115,7 +120,10 @@ async def resolve_target(client, raw: str, join: bool = False, dialogs_cache: di
                 raise ResolveError(f"cannot resolve entity: {raw} ({e})", code="NOT_PARTICIPANT") from e
 
     if join and (getattr(entity, "broadcast", False) or getattr(entity, "megagroup", False)):
-        await client(JoinChannelRequest(entity))
+        try:
+            await client(JoinChannelRequest(entity))
+        except Exception as e:
+            raise ResolveError(f"cannot join channel: {raw} ({e})", code="JOIN_FAILED") from e
     if not await check_membership(client, entity):
         raise ResolveError(f"not participant: {raw}", code="NOT_PARTICIPANT")
     return ResolvedTarget(entity=entity, kind=spec["kind"], value=spec["value"])

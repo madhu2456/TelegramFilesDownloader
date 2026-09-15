@@ -6,14 +6,15 @@ thread-safe ticket-based download initiation. Zero disk writes, O(1) RAM buffer.
 """
 import asyncio
 import binascii
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import logging
 import secrets
 import struct
 import threading
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

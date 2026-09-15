@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from src.instance_lock import (
     acquire_instance_lock,
     cleanup_instance_lock,
@@ -102,6 +104,7 @@ def test_skip_zombie_process(tmp_path: Path, monkeypatch):
 def test_dynamic_port_allocation():
     """Verify find_available_port auto-increments when port is in use."""
     import socket
+
     from src.web.__main__ import find_available_port
 
     # Bind port 8000 to simulate another user's dashboard (or reuse existing in-use state)
@@ -190,4 +193,17 @@ def test_is_pid_matching_app_returns_false_on_cmdline_failure():
          patch("subprocess.run", side_effect=Exception("ps failed")), \
          patch("src.instance_lock._is_pid_alive", return_value=True):
         assert is_pid_matching_app(12345) is False
+
+
+def test_acquire_instance_lock_timeout_raises_timeout_error(tmp_path: Path):
+    session = tmp_path / "timeout_test.session"
+    session.touch()
+
+    with patch("fcntl.flock", side_effect=BlockingIOError), \
+         patch("time.sleep", return_value=None), \
+         patch("time.time", side_effect=[0.0, 0.0, 10.0]):
+        with pytest.raises(TimeoutError) as exc_info:
+            acquire_instance_lock(session)
+        assert "Failed to acquire instance lock" in str(exc_info.value)
+
 

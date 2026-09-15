@@ -38,12 +38,11 @@ def is_pid_matching_app(pid: int) -> bool:
     # Portable fallback for macOS, BSD, or containers where /proc is unmounted
     import subprocess
     try:
-        res = subprocess.run(["ps", "-p", str(pid), "-o", "uid=", "-o", "args="], capture_output=True, text=True, timeout=2.0)
+        res = subprocess.run(["ps", "-p", str(pid), "-o", "uid=", "-o", "args="], capture_output=True, text=True, timeout=2.0, check=False)
         if res.returncode == 0 and res.stdout.strip():
             parts = res.stdout.strip().split(None, 1)
-            if len(parts) >= 1 and parts[0].isdigit():
-                if int(parts[0]) != os.getuid():
-                    return False
+            if len(parts) >= 1 and parts[0].isdigit() and int(parts[0]) != os.getuid():
+                return False
             cmd = res.stdout.lower()
             return any(m in cmd for m in markers)
     except Exception:
@@ -156,8 +155,7 @@ def acquire_instance_lock(session_path: Path | str) -> Path:
             time.sleep(0.1)
 
     if fd is None:
-        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0), 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        raise TimeoutError(f"Failed to acquire instance lock on {lock_path} within timeout")
 
     # Write current PID
     pid_bytes = str(os.getpid()).encode("utf-8")

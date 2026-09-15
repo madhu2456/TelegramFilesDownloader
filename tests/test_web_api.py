@@ -1,28 +1,29 @@
 """Tests for TeleVault Web Dashboard (Core Engine, Security, JobManager, Media, and Static Assets)."""
+import asyncio
+import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
-from starlette.websockets import WebSocketDisconnect
-import asyncio
-from pathlib import Path
-import sqlite3
+
 import pytest
-from telethon.errors import SessionPasswordNeededError
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+from telethon.errors import SessionPasswordNeededError
 
 from src.config import Config
 from src.store import init_db, record_download
 from src.web.app import create_app
-from src.web.job_manager import JobManager, JobConflictError
+from src.web.job_manager import JobConflictError, JobManager
+from src.web.routes_media import classify_mime, parse_range_header
 from src.web.security import (
     generate_ephemeral_token,
-    verify_token,
-    verify_origin,
-    mask_phone,
     get_ephemeral_token,
+    mask_phone,
+    verify_origin,
+    verify_token,
 )
-from src.web.routes_media import classify_mime, parse_range_header
 
 
 def test_security_token_generation_and_verification():
@@ -615,12 +616,14 @@ def test_ws_live_invalid_token_clean_1008(tmp_path: Path):
     app = create_app(cfg)
     client = TestClient(app)
 
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect("/ws/live?token=invalid_token_xyz") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "SESSION_EXPIRED"
-            assert "Session token invalid" in msg["detail"]
-            ws.receive_json()
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect("/ws/live?token=invalid_token_xyz") as ws,
+    ):
+        msg = ws.receive_json()
+        assert msg["type"] == "SESSION_EXPIRED"
+        assert "Session token invalid" in msg["detail"]
+        ws.receive_json()
     assert exc_info.value.code == 1008
 
 
@@ -635,15 +638,17 @@ def test_ws_live_invalid_origin_clean_1008(tmp_path: Path):
     client = TestClient(app)
     token = get_ephemeral_token()
 
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect(
             f"/ws/live?token={token}",
             headers={"origin": "http://evil-domain.com:8000"},
-        ) as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "ORIGIN_FORBIDDEN"
-            assert "Origin not allowed" in msg["detail"]
-            ws.receive_json()
+        ) as ws,
+    ):
+        msg = ws.receive_json()
+        assert msg["type"] == "ORIGIN_FORBIDDEN"
+        assert "Origin not allowed" in msg["detail"]
+        ws.receive_json()
     assert exc_info.value.code == 1008
 
 

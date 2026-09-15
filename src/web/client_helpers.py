@@ -2,6 +2,7 @@
 import inspect
 from typing import Any
 
+
 async def _ensure_connected(client: Any) -> None:
     """Ensure the Telegram client is connected, awaiting is_connected() if it is a coroutine."""
     if client is None:

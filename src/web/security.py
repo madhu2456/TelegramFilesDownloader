@@ -12,10 +12,7 @@ def generate_ephemeral_token() -> str:
     """
     global _ACTIVE_TOKEN
     env_token = os.getenv("TELEVAULT_TOKEN")
-    if env_token:
-        _ACTIVE_TOKEN = env_token.strip()
-    else:
-        _ACTIVE_TOKEN = secrets.token_urlsafe(32)
+    _ACTIVE_TOKEN = env_token.strip() if env_token else secrets.token_urlsafe(32)
     return _ACTIVE_TOKEN
 
 def get_ephemeral_token() -> str | None:

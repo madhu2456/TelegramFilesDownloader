@@ -1,7 +1,9 @@
 """API routes for job control, state snapshot, and WebSocket streaming."""
 import asyncio
 from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.downloader import DownloadOpts
@@ -10,8 +12,6 @@ from src.store import init_db
 from src.web.client_helpers import _ensure_connected
 from src.web.job_manager import JobConflictError, JobManager
 from src.web.security import verify_origin, verify_token
-
-from fastapi.responses import JSONResponse
 
 router = APIRouter()
 

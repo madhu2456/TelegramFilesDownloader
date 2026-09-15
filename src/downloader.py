@@ -1,26 +1,58 @@
 """T5 loop: serial gate statvfs jitter resume filters."""
-import asyncio, fnmatch, hashlib, logging, os, random, signal, time
+import asyncio
+import fnmatch
+import hashlib
+import logging
+import os
+import random
+import signal
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from tqdm import tqdm
-from telethon.errors import FloodWaitError, PeerFloodError
-try: from telethon.errors import TakeoutInitDelayError
-except ImportError: TakeoutInitDelayError = None
 from typing import TYPE_CHECKING
+
+from telethon.errors import FloodWaitError, PeerFloodError
+from tqdm import tqdm
+
+try:
+    from telethon.errors import TakeoutInitDelayError
+except ImportError:
+    TakeoutInitDelayError = None
 if TYPE_CHECKING:
     from .config import scrub_for_log
     from .filesafe import build_filename, precheck_disk, sanitize_component
-    from .store import append_jsonl, find_by_sha, get_sync_checkpoint, is_downloaded, record_download, set_sync_checkpoint
+    from .store import (
+        append_jsonl,
+        find_by_sha,
+        get_sync_checkpoint,
+        is_downloaded,
+        record_download,
+        set_sync_checkpoint,
+    )
 else:
     try:
         from .config import scrub_for_log
         from .filesafe import build_filename, precheck_disk, sanitize_component
-        from .store import append_jsonl, find_by_sha, get_sync_checkpoint, is_downloaded, record_download, set_sync_checkpoint
+        from .store import (
+            append_jsonl,
+            find_by_sha,
+            get_sync_checkpoint,
+            is_downloaded,
+            record_download,
+            set_sync_checkpoint,
+        )
     except ImportError:
         from config import scrub_for_log
         from filesafe import build_filename, precheck_disk, sanitize_component
-        from store import append_jsonl, find_by_sha, get_sync_checkpoint, is_downloaded, record_download, set_sync_checkpoint
+        from store import (
+            append_jsonl,
+            find_by_sha,
+            get_sync_checkpoint,
+            is_downloaded,
+            record_download,
+            set_sync_checkpoint,
+        )
 log = logging.getLogger(__name__); FLOOD_CAP = 300; _stop = False
 def _mark(*a):
     global _stop; _stop = True
@@ -69,7 +101,7 @@ def _rxn(m):
     r = getattr(m, "reactions", None)
     if r is None or isinstance(r, int): return _ino(r)
     res = getattr(r, "results", None)
-    if isinstance(res, (list, tuple)):
+    if isinstance(res, list | tuple):
         try: return sum(int(getattr(x, "count", 0) or 0) for x in res)
         except (TypeError, ValueError): return len(res)
     return _ino(res)
@@ -119,6 +151,16 @@ def _ok(m, o):
         match = bool(getattr(m, o.filter, None) or getattr(med, o.filter, None) or (med and o.filter in str(type(med).__name__).lower()))
         if not match: return False
     return True
+
+
+def _compute_sha256(file_path: Path) -> str:
+    _h = hashlib.sha256()
+    with open(file_path, "rb") as _f:
+        for _c in iter(lambda: _f.read(1 << 20), b""):
+            _h.update(_c)
+    return _h.hexdigest()
+
+
 async def download_chat(client, target, opts, out, conn) -> dict:
     global _stop
     _stop = False
@@ -161,6 +203,18 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                 hook(done=eff_done, skip=eff_skip, total_bytes=eff_bytes, total_msgs=lim, current_file=current_file, speed_mbps=mbps, eta_seconds=eta, relpath=relpath)
             except Exception: pass
 
+    def _make_progress_cb(current_file_name: str, done_count: int, skip_count: int, current_total: int, cancel_ev: object):
+        def _progress_cb(current_chunk_bytes: int, chunk_total_bytes: int = 0) -> None:
+            if cancel_ev and getattr(cancel_ev, "is_set", lambda: False)():
+                raise asyncio.CancelledError("Download cancelled by user")
+            _emit_progress(
+                current_file=current_file_name,
+                done=done_count,
+                skip=skip_count,
+                bytes_done=current_total + current_chunk_bytes,
+            )
+        return _progress_cb
+
     try:
         async with asyncio.Semaphore(1):
             msgs = active.iter_messages(ent, limit=lim, reverse=bool(opts.reverse), search=opts.search, ids=opts.ids, from_user=opts.from_user, min_id=eff_min_id, max_id=opts.max_id); bar = tqdm(total=lim, desc="dl", unit="msg")
@@ -190,16 +244,12 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                     else:
                         fname = raw
                         dst = None
+                        progress_cb = _make_progress_cb(fname, done, skip, total, ce)
 
-                        def _progress_cb(current_chunk_bytes, chunk_total_bytes=0):
-                            if ce and ce.is_set():
-                                raise asyncio.CancelledError("Download cancelled by user")
-                            _emit_progress(current_file=fname, done=done, skip=skip, bytes_done=total + current_chunk_bytes)
-
-                        for att in range(3):
+                        for _att in range(3):
                             try:
                                 try:
-                                    await active.download_media(m, file=str(part), progress_callback=_progress_cb)
+                                    await active.download_media(m, file=str(part), progress_callback=progress_cb)
                                 except TypeError as te:
                                     if "progress_callback" in str(te):
                                         await active.download_media(m, file=str(part))
@@ -223,10 +273,8 @@ async def download_chat(client, target, opts, out, conn) -> dict:
                         if _stop or (ce and ce.is_set()):
                             break
                         if part.exists():
-                            _h = hashlib.sha256()
-                            with open(part, "rb") as _f:
-                                for _c in iter(lambda: _f.read(1 << 20), b""): _h.update(_c)
-                            h = _h.hexdigest(); dst = out / build_filename(mid, h, raw); dup = find_by_sha(conn, cid, h)
+                            h = await asyncio.to_thread(_compute_sha256, part)
+                            dst = out / build_filename(mid, h, raw); dup = find_by_sha(conn, cid, h)
                             if dup and int(dup[0]) != mid and (out / str(dup[1])).exists():
                                 prev = out / str(dup[1])
                                 try:

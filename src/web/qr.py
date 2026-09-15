@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+
 import qrcode
 import qrcode.image.svg
 

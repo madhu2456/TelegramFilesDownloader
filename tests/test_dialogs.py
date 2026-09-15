@@ -2,7 +2,10 @@
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
 from src.dialogs import classify_dialog, fetch_dialog_rows, format_dialog_table
+
+
 class User(SimpleNamespace):
     pass
 class Channel(SimpleNamespace):

@@ -6,11 +6,15 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from telethon.errors import FloodWaitError, TakeoutInitDelayError
+
 from src.downloader import DownloadOpts, _dt, _meta, _ok, _rxn, download_chat
 from src.filesafe import build_filename, sanitize_component
 from src.store import get_sync_checkpoint, init_db, record_download, set_sync_checkpoint
+
+
 def _msg(mid=1, name="f.bin", size=10):
     m = MagicMock(); m.id = mid; m.date = "2024-01-01"; m.sender_id = 1
     m.sender = SimpleNamespace(id=1); m.media = None
@@ -44,7 +48,7 @@ def test_oversize_max_bytes(tmp_path):
     r = _run(c, _tgt(), DownloadOpts(limit=10, max_bytes=0), tmp_path, init_db(":memory:"))
     assert r["done"] == 0
     assert not c.download_media.called
-def test_traversal_and_nul(tmp_path):
+def test_traversal_and_nul():
     assert sanitize_component("../../etc/passwd") == "passwd"
     assert "/" not in sanitize_component("../../etc/passwd") and ".." not in sanitize_component("../../etc/passwd")
     with pytest.raises(ValueError) as e:
@@ -65,9 +69,8 @@ def test_floodwait_resume(tmp_path):
     assert n["c"] == 2
 def test_enospc_raises(tmp_path):
     c = _cli([])
-    with patch("src.downloader.precheck_disk", side_effect=OSError(errno.ENOSPC, "no space")):
-        with pytest.raises(OSError) as e:
-            _run(c, _tgt(), DownloadOpts(limit=10), tmp_path, init_db(":memory:"))
+    with patch("src.downloader.precheck_disk", side_effect=OSError(errno.ENOSPC, "no space")), pytest.raises(OSError) as e:
+        _run(c, _tgt(), DownloadOpts(limit=10), tmp_path, init_db(":memory:"))
     assert e.value.errno == errno.ENOSPC
     assert not c.download_media.called
 def test_dry_run_no_write(tmp_path):
@@ -136,7 +139,7 @@ def test_takeout_wrapper_uses_takeout_client(tmp_path):
     assert not base.iter_messages.called
     assert not base.download_media.called
     assert tcx.__aexit__.called
-def test_utc_valid_normalizes(tmp_path):
+def test_utc_valid_normalizes():
     from datetime import timezone
     dt = _dt("2024-06-01T12:00:00+02:00")
     assert dt is not None and dt.tzinfo == timezone.utc
@@ -211,7 +214,7 @@ def test_sync_checkpoint_persists_and_min_id(tmp_path):
     assert get_sync_checkpoint(conn, 1) == 11
 
 
-def test_filter_matching_message_helper_properties(tmp_path):
+def test_filter_matching_message_helper_properties():
     m_video = SimpleNamespace(id=101, date="2024-01-01", sender_id=1, sender=SimpleNamespace(id=1), media=None, file=SimpleNamespace(name="v.mp4", size=10), video=True, audio=None, photo=None)
     m_audio = SimpleNamespace(id=102, date="2024-01-01", sender_id=1, sender=SimpleNamespace(id=1), media=None, file=SimpleNamespace(name="a.mp3", size=10), video=None, audio=True, photo=None)
 
@@ -223,8 +226,9 @@ def test_filter_matching_message_helper_properties(tmp_path):
 
 
 def test_peer_flood_error_exit_code_3(tmp_path):
-    from src.cli import main
     from telethon.errors import PeerFloodError
+
+    from src.cli import main
 
     with patch("src.cli.load_config") as mock_cfg, \
          patch("src.cli.get_client") as mock_get_client, \
@@ -277,7 +281,7 @@ def test_downloader_cancel_event(tmp_path):
 
     conn = init_db(":memory:")
     opts = DownloadOpts(limit=10)
-    setattr(opts, "cancel_event", cancel_event)
+    opts.cancel_event = cancel_event
 
     with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
         r = asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
@@ -361,9 +365,12 @@ def test_downloader_flood_cap_exceeded_commits_and_raises(tmp_path):
     conn = init_db(":memory:")
     opts = DownloadOpts(limit=10)
 
-    with patch("src.downloader.asyncio.sleep", new=AsyncMock()), patch("src.downloader._isleep", new=AsyncMock()):
-        with pytest.raises(FloodWaitError):
-            asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
+    with (
+        patch("src.downloader.asyncio.sleep", new=AsyncMock()),
+        patch("src.downloader._isleep", new=AsyncMock()),
+        pytest.raises(FloodWaitError),
+    ):
+        asyncio.run(download_chat(c, _tgt(), opts, tmp_path, conn))
 
 
 def test_downloader_meta_helpers():
@@ -392,8 +399,9 @@ def test_downloader_meta_helpers():
 
 
 def test_downloader_isleep_cancel_event():
-    from src.downloader import _isleep
     import threading
+
+    from src.downloader import _isleep
 
     ce = threading.Event()
     ce.set()
@@ -480,8 +488,9 @@ def test_parse_bytes_helper():
 
 
 def test_downloader_ok_filters():
-    from src.downloader import DownloadOpts, _ok
     from types import SimpleNamespace
+
+    from src.downloader import DownloadOpts, _ok
 
     m1 = SimpleNamespace(id=50, file=SimpleNamespace(size=5000, name="video.mp4", ext=".mp4"))
     m2 = SimpleNamespace(id=150, file=SimpleNamespace(size=50000, name="image.jpg", ext=".jpg"))
@@ -503,6 +512,7 @@ def test_downloader_ok_filters():
 def test_downloader_reverse_max_id_break(tmp_path):
     import asyncio
     from unittest.mock import AsyncMock, MagicMock, patch
+
     from src.downloader import DownloadOpts, download_chat
     from src.store import init_db
 

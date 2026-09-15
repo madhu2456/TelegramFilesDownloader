@@ -1,16 +1,15 @@
 """Decoupled JobManager with singleton mutex, circular logs, and detached asyncio.Task."""
 import asyncio
 import collections
-from datetime import datetime, timezone
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
 
 class JobConflictError(Exception):
     """Raised when an attempt is made to start a job while another job is already running."""
-    pass
 
 class JobManager:
     """Thread-safe and async-safe manager for download executions."""
@@ -121,7 +120,7 @@ class JobManager:
             return True
         return False
 
-    async def cancel_job_async(self, timeout: float = 5.0) -> bool:
+    async def cancel_job_async(self, timeout: float = 5.0) -> bool:  # noqa: ASYNC109
         """Cancel the active job and wait for it to finish (up to timeout seconds)."""
         if not self._is_running:
             return False
@@ -133,11 +132,11 @@ class JobManager:
             task.cancel()
             try:
                 await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
-            except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            except (asyncio.CancelledError, TimeoutError, Exception):
                 pass
         # Wait for _is_running to clear (set in _run_job finally block)
         deadline = asyncio.get_event_loop().time() + timeout
-        while self._is_running and asyncio.get_event_loop().time() < deadline:
+        while self._is_running and asyncio.get_event_loop().time() < deadline:  # noqa: ASYNC110
             await asyncio.sleep(0.1)
         return True
 
@@ -164,8 +163,8 @@ class JobManager:
 
         try:
             from src.downloader import download_chat
-            setattr(opts, "cancel_event", self._cancel_event)
-            setattr(opts, "progress_hook", _on_progress)
+            opts.cancel_event = self._cancel_event
+            opts.progress_hook = _on_progress
 
             res = await download_chat(client, target, opts, out, conn)
             status = "cancelled" if self._cancel_event.is_set() else "completed"

@@ -1,5 +1,6 @@
 """Telegram account authentication wizard, explorer, and target resolver routes."""
 import re
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from telethon.errors import SessionPasswordNeededError

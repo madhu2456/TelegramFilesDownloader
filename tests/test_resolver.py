@@ -1,10 +1,19 @@
 """Resolver tests: AsyncMock only, no network."""
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from telethon.errors import ChannelPrivateError, InviteHashExpiredError, InviteHashInvalidError, UsernameNotOccupiedError
+from telethon.errors import (
+    ChannelPrivateError,
+    InviteHashExpiredError,
+    InviteHashInvalidError,
+    UsernameNotOccupiedError,
+)
 from telethon.tl.functions.channels import JoinChannelRequest
+
 from src.resolver import ResolveError, parse_target, resolve_target
+
+
 def _cli(ent=None):
     c = AsyncMock()
     e = ent or MagicMock(id=7)
@@ -94,3 +103,26 @@ def test_parse_target_public_message_and_forum_links():
     assert parse_target("t.me/durov/") == {"kind": "username", "value": "durov"}
     assert parse_target("https://t.me/s/durov") == {"kind": "username", "value": "durov"}
     assert parse_target("t.me/channel/100/200") == {"kind": "username", "value": "channel"}
+
+
+def test_check_membership_exception_handling():
+    from src.resolver import check_membership
+
+    client = AsyncMock()
+    client.get_me.side_effect = RuntimeError("network glitch")
+    entity = MagicMock(broadcast=False, megagroup=False, username=None)
+    res = asyncio.run(check_membership(client, entity))
+    assert res is False
+
+
+def test_resolve_target_join_failure_raises_resolve_error():
+    client = AsyncMock()
+    channel = MagicMock(broadcast=True, megagroup=False, username=None)
+    client.get_entity.return_value = channel
+    client.side_effect = Exception("Flood wait or join error")
+
+    with pytest.raises(ResolveError) as exc_info:
+        asyncio.run(resolve_target(client, "-1001234567890", join=True))
+    assert exc_info.value.code == "JOIN_FAILED"
+    assert "cannot join channel" in str(exc_info.value)
+

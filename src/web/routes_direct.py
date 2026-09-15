@@ -1,11 +1,11 @@
 """Direct browser extraction and streaming routes without server disk writes."""
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
 from telethon import utils
 
 from src.resolver import resolve_target
@@ -119,16 +119,10 @@ async def scan_chat_media(req: ChatScanRequest, request: Request):
         date_utc = None
         m_date = getattr(m, "date", None)
         if m_date:
-            if hasattr(m_date, "isoformat"):
-                date_utc = m_date.isoformat()
-            else:
-                date_utc = str(m_date)
+            date_utc = m_date.isoformat() if hasattr(m_date, "isoformat") else str(m_date)
 
         caption = getattr(m, "text", None) or getattr(m, "message", None) or ""
-        if isinstance(caption, str) and caption:
-            caption = caption[:200]
-        else:
-            caption = ""
+        caption = caption[:200] if isinstance(caption, str) and caption else ""
 
         items.append({
             "msg_id": mid,

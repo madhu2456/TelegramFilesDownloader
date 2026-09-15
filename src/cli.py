@@ -1,32 +1,38 @@
 """T5 CLI: build_parser 0o600 load_config->get_client->resolve_target->download_chat."""
-import argparse, asyncio, logging, os, re, sys
+import argparse
+import asyncio
+import logging
+import os
+import re
+import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from typing import TYPE_CHECKING
+
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError, PeerFloodError
-from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from .auth import ensure_session_file
     from .config import ConfigError, ensure_out_dir, load_config
+    from .dialogs import fetch_dialog_rows, format_dialog_table
+    from .downloader import DownloadOpts, download_chat
     from .resolver import ResolveError, resolve_target
     from .store import init_db
-    from .downloader import DownloadOpts, download_chat
-    from .dialogs import fetch_dialog_rows, format_dialog_table
 else:
     try:
         from .auth import ensure_session_file
         from .config import ConfigError, ensure_out_dir, load_config
+        from .dialogs import fetch_dialog_rows, format_dialog_table
+        from .downloader import DownloadOpts, download_chat
         from .resolver import ResolveError, resolve_target
         from .store import init_db
-        from .downloader import DownloadOpts, download_chat
-        from .dialogs import fetch_dialog_rows, format_dialog_table
     except ImportError:
         from auth import ensure_session_file
         from config import ConfigError, ensure_out_dir, load_config
+        from dialogs import fetch_dialog_rows, format_dialog_table
+        from downloader import DownloadOpts, download_chat
         from resolver import ResolveError, resolve_target
         from store import init_db
-        from downloader import DownloadOpts, download_chat
-        from dialogs import fetch_dialog_rows, format_dialog_table
 log = logging.getLogger(__name__)
 def _chmod600_tree(out):
     r = Path(out); r.mkdir(parents=True, exist_ok=True)
@@ -44,10 +50,10 @@ class TgDlArgumentParser(argparse.ArgumentParser):
         sys.stderr.write(f"{self.prog}: error: {message}\n")
         sys.exit(1)
 
-def parse_bytes(val: str | int | float | None) -> int | None:
+def parse_bytes(val: str | float | None) -> int | None:
     if val is None:
         return None
-    if isinstance(val, (int, float)):
+    if isinstance(val, int | float):
         if val < 0:
             raise ValueError("Size cannot be negative")
         return int(val)
@@ -113,7 +119,7 @@ def main(argv=None) -> int:
                 return 0
         try: return asyncio.run(_list())
         except (FloodWaitError, PeerFloodError): return 3
-        except (OSError, IOError): return 4
+        except OSError: return 4
         except SystemExit as e: return int(str(getattr(e, "code", 1))) if str(getattr(e, "code", "")).isdigit() else 1
         except Exception as e:
             if "auth" in str(type(e).__name__).lower() or "auth" in str(e).lower(): return 2
@@ -147,7 +153,7 @@ def main(argv=None) -> int:
         c = get_client(cfg)
         async with c:
             try: t = await resolve_target(c, str(a.target), join=bool(a.join))
-            except ResolveError as e: return 5 if getattr(e, "code", "") == "EXIT5" else 5
+            except ResolveError: return 5
             db = init_db(Path(out) / "manifest.db")
             try:
                 return await download_chat(c, t, opts, out, db)
@@ -158,7 +164,7 @@ def main(argv=None) -> int:
         return 0
     try: r = asyncio.run(_run())
     except (FloodWaitError, PeerFloodError): return 3
-    except (OSError, IOError): return 4
+    except OSError: return 4
     except SystemExit as e: return int(str(getattr(e, "code", 1))) if str(getattr(e, "code", "")).isdigit() else 1
     except Exception as e:
         if "auth" in str(type(e).__name__).lower() or "auth" in str(e).lower(): return 2

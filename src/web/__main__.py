@@ -46,7 +46,7 @@ def main():
         from src.instance_lock import acquire_instance_lock
         cfg = load_config()
         acquire_instance_lock(cfg.session_path)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[TeleVault] Instance lock note: {e}")
 
     env_port = int(os.getenv("TELEVAULT_PORT", "0") or 0)

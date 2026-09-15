@@ -1,8 +1,10 @@
 """End-to-End (E2E) integration test suite for TeleVault Direct Browser Download and Streaming ZIP."""
-from datetime import datetime, timezone
 import io
-from typing import Any, AsyncGenerator
 import zipfile
+from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
+from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 

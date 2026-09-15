@@ -3,8 +3,10 @@ import asyncio
 import io
 import time
 import zipfile
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -474,8 +476,9 @@ def test_make_dos_time_date() -> None:
 
 async def test_resolve_peer_robust() -> None:
     """Test _resolve_peer_robust direct return, candidate fallbacks, negative ID, and graceful fallback."""
-    from src.web.client_helpers import _resolve_peer_robust
     from telethon.tl.types import PeerChannel, PeerChat
+
+    from src.web.client_helpers import _resolve_peer_robust
 
     # 1. Normal entity / direct return
     direct_entity = object()
