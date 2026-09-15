@@ -57,18 +57,33 @@ jobs:
 
           ssh -i ~/.ssh/id_ed25519 "$SERVER_USER@$SERVER_HOST" 'bash -e -s' << 'EOF'
             set -euo pipefail
+
+            # Ensure deployment root exists and is initialized
+            mkdir -p /opt/televault
             cd /opt/televault
 
-            PREV_SHA=$(git rev-parse HEAD)
-            echo "Current deployed commit: $PREV_SHA"
+            if [ ! -d ".git" ]; then
+              echo "Initializing git repository in /opt/televault..."
+              git init
+              git remote add origin https://github.com/madhu2456/TelegramFilesDownloader.git || true
+            fi
+            git remote set-url origin https://github.com/madhu2456/TelegramFilesDownloader.git 2>/dev/null || git remote add origin https://github.com/madhu2456/TelegramFilesDownloader.git
 
-            echo "Backing up current container image for instant rollback..."
-            docker tag televault:latest televault:rollback-backup 2>/dev/null || true
+            # Resolve current commit safely (empty if initial deployment)
+            PREV_SHA=$(git rev-parse --verify HEAD 2>/dev/null || echo "")
+            if [ -n "$PREV_SHA" ]; then
+              echo "Current deployed commit: $PREV_SHA"
+              echo "Backing up current container image for instant rollback..."
+              docker tag televault:latest televault:rollback-backup 2>/dev/null || true
+            else
+              echo "Initial deployment: no prior HEAD commit found."
+            fi
 
             echo "Syncing latest repository changes from main branch..."
             git fetch origin main
-            git checkout main
+            git checkout -f -B main origin/main
             git reset --hard origin/main
+            git clean -fd
             NEW_SHA=$(git rev-parse HEAD)
             echo "Updated to commit: $NEW_SHA"
 
@@ -78,9 +93,14 @@ jobs:
             echo "Building and launching TeleVault container stack..."
             if ! (docker compose build --pull && docker compose up -d --remove-orphans); then
               echo "Error: Docker compose startup failed. Rolling back..."
-              git reset --hard "$PREV_SHA"
-              docker tag televault:rollback-backup televault:latest 2>/dev/null || true
-              docker compose up -d --no-build || docker compose up -d --build
+              if [ -n "$PREV_SHA" ]; then
+                echo "Rolling back to previous commit: $PREV_SHA"
+                git reset --hard "$PREV_SHA"
+                docker tag televault:rollback-backup televault:latest 2>/dev/null || true
+                docker compose up -d --no-build || docker compose up -d --build
+              else
+                echo "Initial deployment failure. No previous commit to rollback to."
+              fi
               exit 1
             fi
 
@@ -96,11 +116,22 @@ jobs:
             done
 
             if [ "$HEALTHY" != "true" ]; then
-              echo "Health check failed after 30s! Rolling back to commit $PREV_SHA..."
-              git reset --hard "$PREV_SHA"
-              docker tag televault:rollback-backup televault:latest 2>/dev/null || true
-              docker compose up -d --no-build || docker compose up -d --build
-              echo "Rollback completed to $PREV_SHA"
+              echo "Health check failed after 30s! Capturing failed container diagnostics..."
+              echo "=== Docker Compose Logs (Failed Container) ==="
+              docker compose logs --tail=100 2>&1 || true
+              echo "=== Diagnostic HTTP Probe ==="
+              curl -sv http://127.0.0.1:8200/api/health 2>&1 || true
+
+              if [ -n "$PREV_SHA" ]; then
+                echo "Rolling back to previous commit $PREV_SHA..."
+                git reset --hard "$PREV_SHA"
+                docker tag televault:rollback-backup televault:latest 2>/dev/null || true
+                docker compose up -d --no-build || docker compose up -d --build
+                echo "Rollback completed to $PREV_SHA"
+              else
+                echo "Initial deployment failure. Stopping unhealthy containers..."
+                docker compose down || true
+              fi
               exit 1
             fi
 
