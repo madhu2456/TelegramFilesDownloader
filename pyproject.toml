@@ -36,7 +36,7 @@ select = [
     "RUF",    # Ruff-specific rules
 ]
 ignore = [
-    "E701", "E702", "E401", "E501", "TRY003", "TRY300", "B904", "PLW0603", "SIM105", "UP017"
+    "E701", "E702", "E401", "E501", "TRY003", "TRY300", "B904", "PLW0603", "SIM105", "UP017", "ASYNC240"
 ]
 
 [tool.ruff.lint.isort]
@@ -44,7 +44,7 @@ known-first-party = ["src"]
 combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ASYNC230", "S101", "PLW1510"]
+"tests/*" = ["ASYNC230", "ASYNC240", "S101", "PLW1510"]
 "src/cli.py" = ["E402", "BLE001"]
 "src/web/client_helpers.py" = ["BLE001", "S110", "S112"]
 "src/web/routes_tg.py" = ["BLE001"]

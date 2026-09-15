@@ -16,7 +16,7 @@ if (
     and os.path.abspath(sys.executable) != os.path.abspath(str(venv_python))
     and (importlib.util.find_spec("uvicorn") is None or importlib.util.find_spec("fastapi") is None)
 ):
-    os.execv(str(venv_python), [str(venv_python), str(repo_root / "run_web.py")] + sys.argv[1:])
+    os.execv(str(venv_python), [str(venv_python), str(repo_root / "run_web.py"), *sys.argv[1:]])
 
 try:
     from src.web.__main__ import main

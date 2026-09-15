@@ -21,7 +21,7 @@ if (
     and os.path.abspath(sys.executable) != os.path.abspath(str(venv_python))
     and (importlib.util.find_spec("uvicorn") is None or importlib.util.find_spec("fastapi") is None)
 ):
-    os.execv(str(venv_python), [str(venv_python), "-m", "src.web"] + sys.argv[1:])
+    os.execv(str(venv_python), [str(venv_python), "-m", "src.web", *sys.argv[1:]])
 
 
 
