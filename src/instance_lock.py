@@ -23,7 +23,7 @@ def get_lock_file(session_path: Path | str) -> Path:
 
 def is_pid_matching_app(pid: int) -> bool:
     """Check if a PID belongs to this project with Linux /proc and portable fallback."""
-    markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web")
+    markers = ("telegram", "tg-dl", "src.cli", "src.web", "run_web", "televault")
     proc_path = Path(f"/proc/{pid}")
     if proc_path.exists():
         try:
@@ -31,7 +31,16 @@ def is_pid_matching_app(pid: int) -> bool:
             if stat.st_uid != os.getuid():
                 return False
             cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", errors="replace").lower()
-            return any(m in cmdline for m in markers)
+            if any(m in cmdline for m in markers):
+                return True
+            if "pytest" in cmdline:
+                try:
+                    cwd = os.readlink(f"/proc/{pid}/cwd").lower()
+                    if any(m in cwd for m in ("telegram", "tg-dl", "televault")):
+                        return True
+                except (OSError, PermissionError, FileNotFoundError):
+                    pass
+            return False
         except (OSError, PermissionError, FileNotFoundError):
             return False
 
@@ -44,7 +53,15 @@ def is_pid_matching_app(pid: int) -> bool:
             if len(parts) >= 1 and parts[0].isdigit() and int(parts[0]) != os.getuid():
                 return False
             cmd = res.stdout.lower()
-            return any(m in cmd for m in markers)
+            if any(m in cmd for m in markers):
+                return True
+            if "pytest" in cmd:
+                try:
+                    cwd = os.getcwd().lower()
+                    if any(m in cwd for m in ("telegram", "tg-dl", "televault")):
+                        return True
+                except Exception:
+                    pass
     except Exception:
         pass
     return False
@@ -75,6 +92,8 @@ def _is_pid_alive(pid: int) -> bool:
 
 def terminate_existing_process(pid: int, timeout: float = 2.0) -> bool:
     """Gracefully terminate a process: SIGTERM -> poll -> SIGKILL."""
+    if pid <= 0:
+        return False
     if is_zombie(pid):
         log.info("Previous instance (PID %d) is a zombie; skipping signal.", pid)
         return True
@@ -158,10 +177,22 @@ def acquire_instance_lock(session_path: Path | str) -> Path:
         raise TimeoutError(f"Failed to acquire instance lock on {lock_path} within timeout")
 
     # Write current PID
-    pid_bytes = str(os.getpid()).encode("utf-8")
-    os.ftruncate(fd, 0)
-    os.pwrite(fd, pid_bytes, 0)
-    os.fchmod(fd, 0o600)
+    try:
+        pid_bytes = str(os.getpid()).encode("utf-8")
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, pid_bytes, 0)
+        os.fchmod(fd, 0o600)
+    except Exception:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        raise
 
     _active_lock_fd = fd
     _active_lock_path = lock_path
@@ -206,23 +237,24 @@ def cleanup_instance_lock() -> None:
 
     if fd is not None:
         try:
-            if lock_path is not None and lock_path.exists():
+            if lock_path is not None:
                 try:
                     st_fd = os.fstat(fd)
                     st_path = lock_path.stat()
                     if (st_fd.st_dev, st_fd.st_ino) == (st_path.st_dev, st_path.st_ino):
                         lock_path.unlink(missing_ok=True)
                         log.info("Instance lock released: %s", lock_path)
+                except FileNotFoundError:
+                    pass
                 except Exception as e:
                     log.warning("Failed to verify lockfile inode before unlinking %s: %s", lock_path, e)
         finally:
             try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
-                os.close(fd)
             except OSError:
                 pass
-    elif lock_path is not None and lock_path.exists():
-        try:
-            lock_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+            finally:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
