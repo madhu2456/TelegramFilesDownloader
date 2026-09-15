@@ -1,24 +1,28 @@
 """Launcher entrypoint for python -m src.web."""
 import importlib.util
 import os
-from pathlib import Path
 import socket
 import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
+
+import uvicorn
+
+from src.web.app import create_app
+from src.web.security import generate_ephemeral_token
 
 # Auto-detect project virtual environment if dependencies are missing in current environment
 repo_root = Path(__file__).resolve().parent.parent.parent
 venv_python = repo_root / "venv" / "bin" / "python"
-if venv_python.exists() and os.path.abspath(sys.executable) != os.path.abspath(str(venv_python)):
-    if importlib.util.find_spec("uvicorn") is None or importlib.util.find_spec("fastapi") is None:
-        os.execv(str(venv_python), [str(venv_python), "-m", "src.web"] + sys.argv[1:])
+if (
+    venv_python.exists()
+    and os.path.abspath(sys.executable) != os.path.abspath(str(venv_python))
+    and (importlib.util.find_spec("uvicorn") is None or importlib.util.find_spec("fastapi") is None)
+):
+    os.execv(str(venv_python), [str(venv_python), "-m", "src.web"] + sys.argv[1:])
 
-import uvicorn  # noqa: E402
-
-from src.web.app import create_app  # noqa: E402
-from src.web.security import generate_ephemeral_token  # noqa: E402
 
 
 def find_available_port(start_port: int = 8000, max_attempts: int = 50, host: str = "127.0.0.1") -> int:
@@ -42,7 +46,7 @@ def main():
         from src.instance_lock import acquire_instance_lock
         cfg = load_config()
         acquire_instance_lock(cfg.session_path)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"[TeleVault] Instance lock note: {e}")
 
     env_port = int(os.getenv("TELEVAULT_PORT", "0") or 0)

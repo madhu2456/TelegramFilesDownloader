@@ -1,11 +1,11 @@
 """FastAPI application factory with ephemeral security, origin validation, and static serving."""
-from contextlib import asynccontextmanager
 import os
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.cli import get_client
@@ -23,6 +23,7 @@ from src.web.security import (
     verify_token,
 )
 
+
 def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> FastAPI:
     if get_ephemeral_token() is None:
         generate_ephemeral_token()
@@ -39,23 +40,17 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if cfg and not getattr(app.state, "tg_client", None):
-            try:
+            with suppress(Exception):
                 app.state.tg_client = get_client(cfg)
-            except Exception:
-                app.state.tg_client = None
         yield
         jm = getattr(app.state, "job_manager", None)
         if jm:
-            try:
+            with suppress(Exception):
                 await jm.cancel_job_async(timeout=10.0)
-            except Exception:
-                pass
         if getattr(app.state, "tg_client", None):
-            try:
+            with suppress(Exception):
                 if app.state.tg_client.is_connected():
                     await app.state.tg_client.disconnect()
-            except Exception:
-                pass
 
     app = FastAPI(title="TeleVault Web Dashboard", lifespan=lifespan)
     default_hosts = ["127.0.0.1", "localhost", "[::1]", "testserver", "televault.madhudadi.in"]
@@ -76,17 +71,25 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
             origin = request.headers.get("origin")
             port = request.url.port or 8000
             if not verify_origin(origin, port):
-                return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "detail": "Cross-origin request rejected"})
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "FORBIDDEN", "detail": "Cross-origin request rejected"},
+                )
 
         # Token validation on /api/* endpoints
         if path.startswith("/api/") and path.rstrip("/") != "/api/health":
+            auth_header = request.headers.get("authorization")
+            bearer_token = auth_header.replace("Bearer ", "").strip() if auth_header else None
             token = (
                 request.headers.get("x-auth-token")
                 or request.query_params.get("token")
-                or (request.headers.get("authorization", "").replace("Bearer ", "").strip() if request.headers.get("authorization") else None)
+                or bearer_token
             )
             if not verify_token(token):
-                return JSONResponse(status_code=401, content={"error": "UNAUTHORIZED", "detail": "Invalid or missing token"})
+                return JSONResponse(
+                    status_code=401,
+                    content={"error": "UNAUTHORIZED", "detail": "Invalid or missing token"},
+                )
 
         response = await call_next(request)
         if path == "/" or path.startswith("/static/"):
@@ -121,7 +124,11 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
     @app.get("/api/status")
     async def status(request: Request):
         c = getattr(request.app.state, "config", None)
-        session_path = getattr(c, "session_path", Path("session/telegram.session")) if c else Path("session/telegram.session")
+        session_path = (
+            getattr(c, "session_path", Path("session/telegram.session"))
+            if c
+            else Path("session/telegram.session")
+        )
         phone_masked = mask_phone(getattr(c, "phone", "")) if c else ""
         out_dir = str(getattr(request.app.state, "out_dir", "out"))
         scrubbed = scrub_for_log({"out_dir": out_dir, "session_exists": session_path.exists()})
