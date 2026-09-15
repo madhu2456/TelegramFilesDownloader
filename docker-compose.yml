@@ -1,0 +1,34 @@
+services:
+  televault:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: televault:latest
+    container_name: televault
+    init: true
+    restart: unless-stopped
+    user: "1000:1000"
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8200:8000"
+    environment:
+      - TELEVAULT_HEADLESS=1
+      - TELEVAULT_PORT=8000
+      - TELEVAULT_BIND_HOST=0.0.0.0
+      - TELEVAULT_ALLOWED_HOSTS=televault.madhudadi.in,localhost,127.0.0.1
+      - TELEVAULT_FORWARDED_ALLOW_IPS=127.0.0.1,172.16.0.0/12,*
+      - TELEVAULT_OUT_DIR=/app/out
+      - TG_SESSION=/app/session/telegram.session
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./session:/app/session
+      - ./data:/app/data
+      - ./out:/app/out
+    healthcheck:
+      test: ["CMD-SHELL", 'python3 -c "import urllib.request; urllib.request.urlopen(\x27http://127.0.0.1:8000/api/health\x27, timeout=3)" || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

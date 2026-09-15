@@ -23,7 +23,7 @@ from src.web.security import (
     verify_token,
 )
 
-def create_app(cfg: Config | None = None) -> FastAPI:
+def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> FastAPI:
     if get_ephemeral_token() is None:
         generate_ephemeral_token()
 
@@ -44,6 +44,12 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             except Exception:
                 app.state.tg_client = None
         yield
+        jm = getattr(app.state, "job_manager", None)
+        if jm:
+            try:
+                await jm.cancel_job_async(timeout=10.0)
+            except Exception:
+                pass
         if getattr(app.state, "tg_client", None):
             try:
                 if app.state.tg_client.is_connected():
@@ -56,7 +62,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     extra_hosts = [h.strip() for h in os.getenv("TELEVAULT_ALLOWED_HOSTS", "").split(",") if h.strip()]
     allowed_hosts = list(dict.fromkeys(default_hosts + extra_hosts))
     app.state.job_manager = JobManager()
-    app.state.out_dir = "out"
+    app.state.out_dir = str(out_dir) if out_dir is not None else os.getenv("TELEVAULT_OUT_DIR", "out")
     app.state.config = cfg
     app.state.tg_client = None
 
@@ -73,7 +79,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "detail": "Cross-origin request rejected"})
 
         # Token validation on /api/* endpoints
-        if path.startswith("/api/"):
+        if path.startswith("/api/") and path.rstrip("/") != "/api/health":
             token = (
                 request.headers.get("x-auth-token")
                 or request.query_params.get("token")
@@ -100,6 +106,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     app.include_router(direct_router)
 
     app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
+
+    @app.get("/api/health")
+    async def health():
+        return {"status": "ok", "app": "TeleVault"}
 
     @app.get("/")
     async def root():

@@ -1,0 +1,108 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Code Hardening & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run linter (Ruff)
+        run: ruff check .
+
+      - name: Run type checker (MyPy)
+        run: mypy src
+
+      - name: Run test suite (Pytest)
+        run: pytest -v
+
+  deploy:
+    name: Production Deployment & Zero-Downtime Rollback
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production host via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY || secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER || 'madhu' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -i ~/.ssh/id_ed25519 "$SERVER_USER@$SERVER_HOST" 'bash -e -s' << 'EOF'
+            set -euo pipefail
+            cd /opt/televault
+
+            PREV_SHA=$(git rev-parse HEAD)
+            echo "Current deployed commit: $PREV_SHA"
+
+            echo "Backing up current container image for instant rollback..."
+            docker tag televault:latest televault:rollback-backup 2>/dev/null || true
+
+            echo "Syncing latest repository changes from main branch..."
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            NEW_SHA=$(git rev-parse HEAD)
+            echo "Updated to commit: $NEW_SHA"
+
+            echo "Pre-creating host state directories..."
+            mkdir -p session data out && chmod 700 session data out
+
+            echo "Building and launching TeleVault container stack..."
+            if ! (docker compose build --pull && docker compose up -d --remove-orphans); then
+              echo "Error: Docker compose startup failed. Rolling back..."
+              git reset --hard "$PREV_SHA"
+              docker tag televault:rollback-backup televault:latest 2>/dev/null || true
+              docker compose up -d --no-build || docker compose up -d --build
+              exit 1
+            fi
+
+            echo "Polling health check endpoint on http://127.0.0.1:8200/api/health (max 30s)..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              if curl -sf http://127.0.0.1:8200/api/health | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+                echo "TeleVault health check passed (attempt $i/30)!"
+                HEALTHY=true
+                break
+              fi
+              sleep 1
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "Health check failed after 30s! Rolling back to commit $PREV_SHA..."
+              git reset --hard "$PREV_SHA"
+              docker tag televault:rollback-backup televault:latest 2>/dev/null || true
+              docker compose up -d --no-build || docker compose up -d --build
+              echo "Rollback completed to $PREV_SHA"
+              exit 1
+            fi
+
+            echo "TeleVault production deployment completed successfully!"
+          EOF

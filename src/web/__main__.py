@@ -65,13 +65,14 @@ def main():
 
     bind_host = os.getenv("TELEVAULT_BIND_HOST", "127.0.0.1")
     app = create_app()
+    forwarded_ips = os.getenv("TELEVAULT_FORWARDED_ALLOW_IPS", "127.0.0.1,172.16.0.0/12,*")
     uvicorn.run(
         app,
         host=bind_host,
         port=port,
         log_level="info",
         proxy_headers=True,
-        forwarded_allow_ips="127.0.0.1",
+        forwarded_allow_ips=forwarded_ips,
     )
 
 if __name__ == "__main__":

@@ -5,15 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=madhud
-Group=madhud
-WorkingDirectory=/run/media/madhud/Storage/LinuxProjects/Codes/Projects/TelegramDownloader
-EnvironmentFile=-/run/media/madhud/Storage/LinuxProjects/Codes/Projects/TelegramDownloader/.env
+User=madhu
+Group=madhu
+WorkingDirectory=/opt/televault
+EnvironmentFile=-/opt/televault/.env
 Environment="TELEVAULT_HEADLESS=1"
 Environment="TELEVAULT_ALLOWED_HOSTS=televault.madhudadi.in"
-Environment="TELEVAULT_PORT=8000"
+Environment="TELEVAULT_PORT=8200"
 Environment="TELEVAULT_BIND_HOST=127.0.0.1"
-ExecStart=/run/media/madhud/Storage/LinuxProjects/Codes/Projects/TelegramDownloader/venv/bin/python run_web.py
+ExecStart=/opt/televault/venv/bin/python run_web.py
 Restart=always
 RestartSec=3
 KillMode=process

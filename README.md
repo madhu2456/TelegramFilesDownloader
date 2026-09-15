@@ -56,6 +56,14 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
 - **SQLite Manifest Audit & Resumption**: Monotonic sync checkpoints (`--sync`, `--min-id`) in `out/manifest.db` with `UNIQUE(chat_id, msg_id)` and SHA-256 deduplication linking identical payloads as aliases.
 - **Filesystem Hardening**: Restrictive `chmod 600` on secrets/files, `0o700` directory trees, `umask 077`, atomic replaces with directory `fsync`, and automatic `.part` cleanup on aliases and skips.
 
+### Production Deployment & CI/CD
+- **Hardened Multi-Stage Docker Container**: Production-ready Python 3.12 runner (`Dockerfile`) with least-privilege non-root execution (`madhu:madhu` UID `1000:1000`), container health checks, and 30s graceful teardown.
+- **Docker Compose Orchestration**: Configured in `docker-compose.yml` with host loopback mapping `127.0.0.1:8200:8000` (container listens on 8000, mapped to host 8200), mounting persistent volumes for `./session`, `./data`, and `./out`.
+- **Nginx Reverse Proxy (Port 8200)**: Hardened production configuration (`deploy/nginx/televault.conf`) with automatic HTTP->HTTPS redirect, TLS 1.2/1.3 ciphers, unbuffered proxy streaming (`proxy_buffering off;`) for direct Telegram MTProto and ZIP downloads, and persistent 24-hour WebSocket upgrades (`/ws/`).
+- **Automated GitHub Actions CI/CD with Rollback**: Automated testing gate (Ruff, MyPy, Pytest) and SSH deployment pipeline (`.github/workflows/deploy.yml`) to `/opt/televault` with 30s automated health polling (`http://127.0.0.1:8200/api/health`) and instant zero-downtime rollback to the previous commit and container image on failure.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full deployment instructions and runbooks.
+
 ## Quickstart
 
 ```bash

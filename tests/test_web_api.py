@@ -88,6 +88,28 @@ def test_app_status_auth_and_origin(tmp_path: Path):
     assert resp.status_code == 403
 
 
+def test_api_health_unauthenticated(tmp_path: Path):
+    cfg = Config(
+        api_id=12345,
+        api_hash="abcdef0123456789abcdef0123456789",
+        phone="+15551234567",
+        session_path=tmp_path / "test.session",
+    )
+    app = create_app(cfg, out_dir=tmp_path)
+    client = TestClient(app)
+
+    # Health check is open and unauthenticated
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok", "app": "TeleVault"}
+
+    # Status remains protected
+    status_resp = client.get("/api/status")
+    assert status_resp.status_code == 401
+    assert "UNAUTHORIZED" in status_resp.text
+
+
+
 def test_job_manager_singleton_mutex_and_circular_buffer():
     jm = JobManager()
     assert jm.is_running() is False
