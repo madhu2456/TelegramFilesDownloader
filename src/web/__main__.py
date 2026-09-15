@@ -11,7 +11,7 @@ from pathlib import Path
 import uvicorn
 
 from src.web.app import create_app
-from src.web.security import generate_ephemeral_token
+from src.web.security import get_token_source, init_security
 
 # Auto-detect project virtual environment if dependencies are missing in current environment
 repo_root = Path(__file__).resolve().parent.parent.parent
@@ -51,12 +51,14 @@ def main():
 
     env_port = int(os.getenv("TELEVAULT_PORT", "0") or 0)
     port = env_port if env_port > 0 else find_available_port(8000, 50)
-    token = generate_ephemeral_token()
+    token = init_security()
+    source = get_token_source()
     url = f"http://127.0.0.1:{port}/?token={token}"
     print("=" * 60)
     print(" TeleVault Modern Web Dashboard ")
     print(f" Web UI: {url}")
-    print(" Ephemeral startup token generated and active.")
+    print(f" Master Access Token: {token}")
+    print(f" Token Source: {source}")
     print("=" * 60)
 
     headless = bool(os.getenv("TELEVAULT_HEADLESS") or os.getenv("DISPLAY") is None)

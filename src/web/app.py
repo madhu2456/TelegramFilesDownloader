@@ -16,17 +16,32 @@ from src.web.routes_jobs import router as jobs_router
 from src.web.routes_media import router as media_router
 from src.web.routes_tg import router as tg_router
 from src.web.security import (
-    generate_ephemeral_token,
+    get_auth_rate_limiter,
     get_ephemeral_token,
+    init_security,
     mask_phone,
     verify_origin,
     verify_token,
 )
 
 
+def get_client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first_ip = xff.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+    x_real = request.headers.get("x-real-ip")
+    if x_real and x_real.strip():
+        return x_real.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
 def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> FastAPI:
     if get_ephemeral_token() is None:
-        generate_ephemeral_token()
+        init_security()
 
     if cfg is None:
         try:
@@ -66,6 +81,10 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
     async def security_middleware(request: Request, call_next):
         path = request.url.path
 
+        # Health check bypass
+        if path.rstrip("/") == "/api/health":
+            return await call_next(request)
+
         # Origin validation for state-changing requests
         if request.method in ("POST", "PUT", "DELETE", "PATCH"):
             origin = request.headers.get("origin")
@@ -76,8 +95,18 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
                     content={"error": "FORBIDDEN", "detail": "Cross-origin request rejected"},
                 )
 
-        # Token validation on /api/* endpoints
-        if path.startswith("/api/") and path.rstrip("/") != "/api/health":
+        # Token validation & rate limiting on /api/* endpoints
+        if path.startswith("/api/"):
+            client_ip = get_client_ip(request)
+            limiter = get_auth_rate_limiter()
+            if limiter.is_rate_limited(client_ip):
+                retry_after = limiter.get_retry_after(client_ip)
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "TOO_MANY_REQUESTS", "detail": "Too many failed authentication attempts. Please try again later."},
+                    headers={"Retry-After": str(retry_after)},
+                )
+
             auth_header = request.headers.get("authorization")
             bearer_token = auth_header.replace("Bearer ", "").strip() if auth_header else None
             token = (
@@ -86,10 +115,12 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
                 or bearer_token
             )
             if not verify_token(token):
+                limiter.record_failure(client_ip)
                 return JSONResponse(
                     status_code=401,
                     content={"error": "UNAUTHORIZED", "detail": "Invalid or missing token"},
                 )
+            limiter.reset(client_ip)
 
         response = await call_next(request)
         if path == "/" or path.startswith("/static/"):

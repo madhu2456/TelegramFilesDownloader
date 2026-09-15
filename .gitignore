@@ -19,3 +19,8 @@ out/
 .idea/
 *.pid
 .*.pid
+
+# Master token persistence & application data
+data/
+*.token
+.*.token

@@ -48,12 +48,12 @@ Pre-create the required persistent host directories with correct ownership and r
 # Pre-create stateful directories matching container mounts
 mkdir -p session data out
 chown -R 1000:1000 session data out
-chmod 700 session out
+chmod 700 session data out
 ```
 
 Persistent Volume Mounts:
 - `./session:/app/session`: MTProto `.session` file and single-instance lockfiles.
-- `./data:/app/data`: Local application state, caches, and auxiliary databases.
+- `./data:/app/data`: Local application state, caches, auxiliary databases, and the persisted master access token (`/app/data/.token`, `chmod 600`).
 - `./out:/app/out`: Downloaded files and SQLite audit log (`manifest.db`).
 
 ### Step 2.2: Configure Environment Variables (`.env`)
@@ -72,7 +72,10 @@ TG_SESSION=/app/session/telegram.session
 # ==============================================================================
 # TeleVault Server Configuration
 # ==============================================================================
-# Pin a static secret token for web UI authorization (leave blank for ephemeral)
+# Master token configuration (optional static override):
+# - Set TELEVAULT_TOKEN to enforce a static master access token across all requests.
+# - Leave blank/unset to let TeleVault automatically generate a 32-byte cryptographic
+#   token on first boot, persisting to `/app/data/.token` (chmod 600) across restarts.
 TELEVAULT_TOKEN=your_secure_random_token_here
 
 # TeleVault internal port and binding
@@ -88,7 +91,21 @@ EOF
 chmod 600 /opt/televault/.env
 ```
 
-### Step 2.3: Launch Container Stack
+### Step 2.3: Master Token Persistence & `docker-compose.yml` Configuration
+
+TeleVault provides dual authentication modes for containerized deployments:
+
+1. **Automatic File-Based Token Persistence (`./data:/app/data`)**:
+   - In `docker-compose.yml`, the stateful host directory `./data` is mounted to `/app/data`.
+   - On first startup (when `TELEVAULT_TOKEN` is unset or empty), TeleVault automatically generates a cryptographically secure 32-byte master token (`secrets.token_urlsafe(32)`), writes it atomically to `/app/data/.token` with restrictive permissions (`chmod 600`), and logs it to stdout (`docker compose logs televault`).
+   - Because `./data:/app/data` is mounted as a persistent host volume, `/app/data/.token` is preserved across container rebuilds, restarts, and image updates. On subsequent launches, TeleVault reads and reuses the existing token instead of generating a new one.
+   - Users accessing the dashboard without `?token=...` can click the "Token: Missing" header pill (`#tokenPill`) or use the on-screen Access Token Modal (`#tokenModal`) to authenticate without altering URL parameters. The token is saved in browser `localStorage` and sent with subsequent requests.
+
+2. **Static Environment Override (`TELEVAULT_TOKEN`)**:
+   - `docker-compose.yml` configures `TELEVAULT_TOKEN=${TELEVAULT_TOKEN:-}` under `environment:`.
+   - Defining `TELEVAULT_TOKEN=your_secure_random_token_here` in `.env` overrides the persisted file in `/app/data/.token`, enforcing a fixed master token across the deployment.
+
+### Step 2.4: Launch Container Stack
 Start the TeleVault stack using Docker Compose:
 
 ```bash

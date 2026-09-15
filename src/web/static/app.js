@@ -32,16 +32,117 @@ window._lastActiveElement = null;
     token = sessionStorage.getItem('tele_vault_token') || '';
   }
   if (!token) {
-    setTimeout(() => {
-      showToast(
-        'Authentication token required. Please use the link printed in your terminal: http://127.0.0.1:8000/?token=...',
-        'warning',
-        'Token Required',
-        8000
-      );
-    }, 100);
+    // Suppress initial 401 storm; window.onload will open the modal
   }
 })();
+
+function updateTokenPill() {
+  const pill = document.getElementById('tokenPill');
+  const text = document.getElementById('tokenPillText');
+  if (!pill || !text) return;
+  pill.setAttribute('aria-label', token ? 'Access Token Settings: Token Active' : 'Access Token Settings: Token Missing');
+  if (token) {
+    pill.classList.remove('missing');
+    text.textContent = 'Token: Set';
+    pill.title = 'Master access token is active. Click to view or change.';
+  } else {
+    pill.classList.add('missing');
+    text.textContent = 'Token: Missing';
+    pill.title = 'Master access token is missing. Click to authenticate.';
+  }
+}
+
+function openTokenModal(force = false, errorMsg = '') {
+  const modal = document.getElementById('tokenModal');
+  if (!modal) return;
+  window._lastActiveElement = document.activeElement;
+  const inp = document.getElementById('tokenInput');
+  if (inp) {
+    inp.value = token || '';
+    if (errorMsg) {
+      inp.setAttribute('aria-invalid', 'true');
+      inp.setAttribute('aria-describedby', 'tokenModalError');
+    } else {
+      inp.removeAttribute('aria-invalid');
+      inp.removeAttribute('aria-describedby');
+    }
+  }
+  const err = document.getElementById('tokenModalError');
+  if (err) {
+    if (errorMsg) {
+      err.textContent = errorMsg;
+      err.style.display = 'block';
+    } else {
+      err.textContent = '';
+      err.style.display = 'none';
+    }
+  }
+  const cancelBtn = document.getElementById('tokenModalCancelBtn');
+  const closeBtn = document.getElementById('tokenModalCloseBtn');
+  if (!token || force) {
+    if (cancelBtn) cancelBtn.style.display = token ? 'inline-block' : 'none';
+    if (closeBtn) closeBtn.style.display = token ? 'inline-flex' : 'none';
+  } else {
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    if (closeBtn) closeBtn.style.display = 'inline-flex';
+  }
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  if (inp) setTimeout(() => inp.focus(), 50);
+}
+
+function closeTokenModal(force = false) {
+  if (!token && !force) return;
+  const modal = document.getElementById('tokenModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if (window._lastActiveElement && typeof window._lastActiveElement.focus === 'function') {
+    window._lastActiveElement.focus();
+  }
+}
+
+function saveAuthToken() {
+  const inp = document.getElementById('tokenInput');
+  const err = document.getElementById('tokenModalError');
+  const val = inp ? inp.value.trim() : '';
+  if (!val) {
+    if (inp) {
+      inp.setAttribute('aria-invalid', 'true');
+      inp.setAttribute('aria-describedby', 'tokenModalError');
+    }
+    if (err) { err.textContent = 'Token cannot be empty'; err.style.display = 'block'; }
+    return;
+  }
+  if (inp) {
+    inp.removeAttribute('aria-invalid');
+    inp.removeAttribute('aria-describedby');
+  }
+  token = val;
+  sessionStorage.setItem('tele_vault_token', val);
+  updateTokenPill();
+  closeTokenModal(true);
+  showToast('Master access token saved', 'success');
+  if (ws) {
+    ws.onclose = null;
+    try { ws.close(1000); } catch(e) {}
+  }
+  connectWebSocket();
+  checkAuth();
+  updateStorage();
+  loadMedia();
+}
+
+const _originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const res = await _originalFetch.apply(this, args);
+  if (res.status === 401) {
+    token = '';
+    sessionStorage.removeItem('tele_vault_token');
+    updateTokenPill();
+    openTokenModal(true, 'Session token invalid or expired. Please re-enter master access token.');
+  }
+  return res;
+};
 
 function getHeaders() {
   return {
@@ -148,13 +249,9 @@ function connectWebSocket() {
     if (event && (event.code === 1008 || event.code === 4403 || event.code === 1003)) {
       sessionStorage.removeItem('tele_vault_token');
       token = '';
+      updateTokenPill();
       if (text) text.innerText = 'Session Expired';
-      showToast(
-        'Session token invalid or expired. Please close this tab or open the fresh link printed in your terminal.',
-        'error',
-        'Session Expired',
-        10000
-      );
+      openTokenModal(true, 'Authentication failed or session expired. Please re-enter master access token.');
       return;
     }
     if (text) text.innerText = 'Reconnecting...';
@@ -175,18 +272,20 @@ function handleWsEvent(data) {
   if (data.type === 'SESSION_EXPIRED' || data.type === 'ORIGIN_FORBIDDEN') {
     sessionStorage.removeItem('tele_vault_token');
     token = '';
+    updateTokenPill();
     const dot = document.getElementById('wsDot');
     const text = document.getElementById('wsText');
     if (dot) dot.className = 'live-dot disconnected';
     if (text) text.innerText = 'Session Expired';
     const msg = data.type === 'ORIGIN_FORBIDDEN'
       ? 'WebSocket connection rejected: Origin not allowed.'
-      : 'Session token invalid or expired. Please click the fresh link printed in your terminal.';
+      : 'Session token invalid or expired. Please re-enter master access token.';
     showToast(msg, 'error', 'Session Expired', 10000);
     if (ws) {
       ws.onclose = null;
       try { ws.close(1000); } catch (e) {}
     }
+    openTokenModal(true, msg);
     return;
   }
   if (data.type === 'INIT_STATE') {
@@ -979,10 +1078,12 @@ async function updateStorage() {
 // 10. Global Keyboard Navigation (Productivity Shortcuts)
 document.addEventListener('keydown', (e) => {
   const activeTag = document.activeElement ? document.activeElement.tagName : '';
+  const tokenModal = document.getElementById('tokenModal');
   const twoFactorModal = document.getElementById('twoFactorModal');
   const mediaLightboxModal = document.getElementById('mediaLightboxModal');
   const fileSelectorModal = document.getElementById('fileSelectorModal');
-  const activeModal = (twoFactorModal && twoFactorModal.style.display !== 'none') ? twoFactorModal
+  const activeModal = (tokenModal && tokenModal.style.display !== 'none') ? tokenModal
+                    : (twoFactorModal && twoFactorModal.style.display !== 'none') ? twoFactorModal
                     : (mediaLightboxModal && mediaLightboxModal.style.display !== 'none') ? mediaLightboxModal
                     : (fileSelectorModal && fileSelectorModal.style.display !== 'none') ? fileSelectorModal
                     : null;
@@ -1022,6 +1123,9 @@ document.addEventListener('keydown', (e) => {
       activeTip.classList.remove('active');
       activeTip.querySelector('.tooltip-trigger')?.setAttribute('aria-expanded', 'false');
       return;
+    }
+    if (token) {
+      closeTokenModal();
     }
     closeTwoFactorModal();
     closeMediaLightbox();
@@ -1531,6 +1635,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.onload = () => {
+  updateTokenPill();
+  if (!token) {
+    openTokenModal(true);
+    return; // Suppress initial 401 storm
+  }
   connectWebSocket();
   checkAuth();
   updateStorage();

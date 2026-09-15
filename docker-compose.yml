@@ -19,6 +19,7 @@ services:
       - TELEVAULT_FORWARDED_ALLOW_IPS=127.0.0.1,172.16.0.0/12,*
       - TELEVAULT_OUT_DIR=/app/out
       - TG_SESSION=/app/session/telegram.session
+      - TELEVAULT_TOKEN=${TELEVAULT_TOKEN:-}
     env_file:
       - path: .env
         required: false

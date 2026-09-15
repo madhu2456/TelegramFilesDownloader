@@ -41,6 +41,8 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
 
 ### Hardened Core & Security
 - **Single-Instance Process Locking**: Session-scoped lockfile engine (`.{stem}.pid`) with `os.O_CLOEXEC`, non-blocking flock deadline loop (4.0s timeout), and phantom inode validation (`st_dev` and `st_ino` verification on both acquisition and unlinking to protect against stale descriptor unlinking). Features PID recycling checks via `/proc/{pid}/cmdline` and `ps`, zombie detection (`State: Z`), and clean SIGTERM-to-SIGKILL termination of obsolete instances.
+- **Persistent Master Token & In-Browser Authentication**: Automatic token persistence to `data/.token` (`chmod 600`) or environment override (`TELEVAULT_TOKEN`), timing-safe constant-time SHA-256 pre-hashed verification, and an in-browser Access Token Modal (`#tokenModal`) accessible via the header status pill (`#tokenPill`) to enter/update master tokens without modifying URL parameters.
+- **Sliding-Window Auth Rate Limiting**: Max 10 failed auth attempts per 60s per client IP (returning HTTP 429 with `Retry-After`), reverse proxy `X-Forwarded-For` client IP tracking, and unconditional bypass for Docker health probes (`/api/health`).
 - **RFC 7233 Byte-Range Streaming & Media Sandbox**: On-demand HTTP 206 Partial Content streaming with chunked byte-range parsing, `Accept-Ranges: bytes`, and RFC 5987 UTF-8 encoded `Content-Disposition` headers, protected by defense-in-depth isolation:
   - `Content-Security-Policy: sandbox; default-src 'none'; media-src 'self'; img-src 'self'`
   - `X-Content-Type-Options: nosniff`
@@ -88,7 +90,7 @@ Get `api_id` / `api_hash` at <https://my.telegram.org> under API development too
 
 ### Launch TeleVault Web Dashboard
 
-Start the web dashboard (generates an ephemeral security token and opens your browser automatically):
+Start the web dashboard (generates or loads the persistent master security token and opens your browser automatically):
 
 ```bash
 python run_web.py
@@ -96,7 +98,7 @@ python run_web.py
 python -m src.web
 ```
 
-Navigate to `http://127.0.0.1:8000/?token=<ephemeral_token>` if not opened automatically.
+Upon first boot, a master token is persisted to `data/.token` (`chmod 600`) and output in the startup banner. On subsequent boots, the existing token is preserved and reused. Users navigating to `http://127.0.0.1:8000/` without `?token=...` can click the "Token: Missing" header pill (`#tokenPill`) or use the on-screen Access Token Modal (`#tokenModal`) to authenticate. Alternatively, navigate directly to `http://127.0.0.1:8000/?token=<master_token>`.
 
 ### Or Run via CLI
 
@@ -172,6 +174,6 @@ tests/              # Comprehensive test suite
 - **Zero-Exfiltration QR Auth**: Pure-Python in-memory SVG QR code engine operating strictly locally without external HTTP calls or third-party telemetry.
 - **Media Streaming Sandbox**: Strict `Content-Security-Policy: sandbox; default-src 'none'; media-src 'self'; img-src 'self'` and `X-Content-Type-Options: nosniff` on all media streaming responses.
 - **Path Traversal Guards**: Strict resolution checks verifying that all served media paths remain contained within the configured output directory.
-- **Ephemeral Session Authentication**: Timing-attack resistant token validation (`secrets.compare_digest`) and strict WebSocket Origin header verification.
+- **Master Token Authentication & Sliding-Window Rate Limiting**: Timing-safe constant-time SHA-256 pre-hashed token verification (`hmac.compare_digest`), persistent master token storage in `data/.token` (`chmod 600`) or `TELEVAULT_TOKEN` environment override, sliding-window auth rate limiting (max 10 failed attempts per 60s per client IP returning HTTP 429 with `Retry-After`), and strict WebSocket Origin header verification.
 - **Local Secret Isolation**: Never commit `.env` or `*.session*`; both are git-ignored. Keep secrets private: `chmod 600 .env session/telegram.session` and `umask 077`.
 - **Sanitized Issue Reporting**: Use placeholders (`your_api_id_here`, `+15551234567`) in issues and examples.
