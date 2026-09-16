@@ -1080,3 +1080,16 @@ def test_production_host_and_origin_validation(tmp_path: Path):
     ) as ws:
         data = ws.receive_json()
         assert data["type"] == "INIT_STATE"
+
+
+def test_direct_streaming_ui_and_storage_pill_removal():
+    """Verify #storagePill is absent from HTML, updateStorage short-circuits in JS, and direct streaming copy is active."""
+    static_dir = Path(__file__).resolve().parent.parent / "src" / "web" / "static"
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    js = (static_dir / "app.js").read_text(encoding="utf-8")
+    assert 'id="storagePill"' not in html
+    assert "storagePill" in js
+    assert "if (!pill) return;" in js
+    assert "Direct Browser Streaming Active" in js
+    assert "Browse &amp; Download Files" in html
+

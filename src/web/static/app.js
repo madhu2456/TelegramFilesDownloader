@@ -962,8 +962,8 @@ async function loadMedia() {
           <div class="empty-state-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </div>
-          <div class="empty-state-title">No Media Downloaded</div>
-          <div class="empty-state-desc">Arm a target from the Chat Explorer and click Start Download to populate your vault.</div>
+          <div class="empty-state-title">Direct Browser Streaming Active</div>
+          <div class="empty-state-desc">TeleVault streams files directly to your device without storing copies on the server disk. Use the File Extractor above to browse and download channel media.</div>
         </div>
       `;
       return;
@@ -1130,6 +1130,8 @@ function copyToClipboard(text) {
 
 // 9. Storage & System Health Monitor
 async function updateStorage() {
+  const pill = document.getElementById('storagePill');
+  if (!pill) return;
   try {
     const res = await fetch('/api/system/storage', { headers: getHeaders() });
     if (!res.ok) return;
@@ -1138,14 +1140,11 @@ async function updateStorage() {
     const freeGb = (data.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const totalGb = (data.total_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const usedGb = (data.used_bytes / (1024 * 1024 * 1024)).toFixed(1);
-    const pill = document.getElementById('storagePill');
-    if (pill) {
-      pill.innerText = `Disk: ${freeGb}G free / ${totalGb}G (${data.used_percent}% used)`;
-      pill.title = `Partition Storage: ${usedGb} GB used, ${freeGb} GB free of ${totalGb} GB total`;
-      if (data.is_low_space) {
-        pill.style.borderColor = 'var(--accent-crimson)';
-        pill.style.color = '#F87171';
-      }
+    pill.innerText = `Disk: ${freeGb}G free / ${totalGb}G (${data.used_percent}% used)`;
+    pill.title = `Partition Storage: ${usedGb} GB used, ${freeGb} GB free of ${totalGb} GB total`;
+    if (data.is_low_space) {
+      pill.style.borderColor = 'var(--accent-crimson)';
+      pill.style.color = '#F87171';
     }
   } catch (e) {}
 }

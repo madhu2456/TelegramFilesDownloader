@@ -15,10 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bounded LRU Client Pool & Idle Sweeper**: `SessionManager` manages a bounded pool of up to 25 concurrent active Telethon clients with automatic 15-minute idle TTL background reaping (preserving active downloads) and HTTP 503 capacity defense.
 - **Decoupled Server Daemon Lock**: Server daemon PID lock (`session/.televault_server.pid`) operates independently from CLI executions, permitting concurrent CLI operations while the web dashboard is running.
 - **SQLite WAL Mode Hardening**: Manifest audit database and Telethon session databases operate in WAL mode (`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=10000; PRAGMA synchronous=NORMAL;`) for safe concurrent multi-tenant reads and writes.
+- **Direct Streaming Primary Call-To-Action**: Elevated **"Browse & Download Files"** (`openFileSelectorModal()`) as the primary visual call-to-action in Module 3, routing visitors directly into in-memory browser MTProto chunk streaming and on-the-fly streaming ZIP packaging with zero server disk footprint (`/out`). Server-side disk sync (`startDownload()`) was demoted to secondary action **"Server Sync"**.
+- **Automated Regression Test**: Added `test_direct_streaming_ui_and_storage_pill_removal` in `tests/test_web_api.py` asserting `#storagePill` DOM absence, `updateStorage` short-circuit integrity, direct streaming empty state text, and primary button labels.
 
 ### Changed
 - Refactored media streaming and ZIP download URL generators to avoid attaching empty `?token=` query parameters when running in visitor session mode.
 - Relaxed token requirements on `/api/dialogs`, `/api/direct/scan`, `/api/direct/download`, and `/api/direct/zip` endpoints in favor of visitor session cookie validation with master-token precedence.
+- **Host Disk Storage Pill Removal**: Removed host partition disk monitor pill (`Disk: -- / --` / `#storagePill`) from the dashboard header, eliminating redundant `/api/system/storage` polling overhead for public visitors. `updateStorage()` in `app.js` now immediately short-circuits if `#storagePill` is not present in the DOM.
+- **Media Gallery Empty State**: Updated media gallery empty state messaging to explain direct browser streaming and guide visitors to use the File Extractor above.
 
 ---
 

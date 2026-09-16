@@ -27,10 +27,10 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
   - **SQLite SQL-Pushdown Kind Filtering**: Instant filtering across media kinds (`Video`, `Photo`, `Audio`, `Document`) pushed directly down to SQLite queries (`WHERE mime LIKE ... OR relpath LIKE ...`) with `LIMIT`/`OFFSET` pagination to avoid full-table scans.
   - **Responsive Theater Lightbox**: Fullscreen immersive media viewer for inline video playback, audio listening, and high-resolution photo viewing with `ArrowLeft`/`ArrowRight` navigation, one-click SHA-256 clipboard copy, and direct RFC 7233 stream access.
   - **Chat Explorer & Target Arming**: Searchable account dialog picker (channels, groups, DMs) with 1-click target arming into the download configuration panel.
-  - **System Storage Health Monitor**: Live disk capacity telemetry via `os.statvfs` with dynamic low-space warning alerts (<10% threshold).
+  - **Direct Browser Streaming First**: Prioritizes client-side streaming over server disk persistence; visitors stream files and ZIP archives directly into their browser with zero server disk overhead. Removed redundant host partition disk monitor pill from the header to eliminate unnecessary polling.
   - **Decoupled JobManager Resilience**: Background task architecture completely detached from browser sessions; downloads survive browser tab closures, page reloads, and network interruptions under singleton mutex protection.
 - **Direct Browser File Extractor & Streaming (`POST /api/chat/scan` & `GET /api/direct/download`)**:
-  - **Pre-Download Inspection**: Click "Extract & Select Files (Browser)" before starting downloads to scan and inspect media items directly from any chat.
+  - **Primary Action "Browse & Download Files"**: Elevated as the primary visual call-to-action in Module 3, allowing visitors to inspect media items and stream directly to local storage without writing to server disk.
   - **Zero Server Disk Footprint**: Media chunks stream directly from Telegram MTProto through FastAPI into the client browser, completely bypassing server disk storage (`/out`) with bounded 512 KB memory buffers.
   - **Selective Batch Downloads**: Checkbox selection for individual or all files, live instant search, kind filtering pills (`All`, `Video`, `Photo`, `Audio`, `Docs`), total selected size calculation, and a 750ms staggered queue engine to avoid browser popup blockers.
 - **On-The-Fly Streaming ZIP Engine (`POST /api/direct/zip/prepare` & `GET /api/direct/zip/stream/{ticket}`)**:
