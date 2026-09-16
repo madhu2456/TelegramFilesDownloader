@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /app
+Allow: /sitemap.xml
+Allow: /llms.txt
+Allow: /llms-full.txt
+Disallow: /api/
+Disallow: /ws/
+
+Sitemap: https://televault.madhudadi.in/sitemap.xml

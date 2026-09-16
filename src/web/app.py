@@ -5,8 +5,8 @@ import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -108,8 +108,8 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
     async def security_middleware(request: Request, call_next):
         path = request.url.path
 
-        # 1. Health check bypass
-        if path.rstrip("/") == "/api/health":
+        # 1. Health check & discovery endpoints bypass (avoid setting cookies on crawlers)
+        if path.rstrip("/") in ("/api/health", "/robots.txt", "/sitemap.xml", "/llms.txt", "/llms-full.txt"):
             return await call_next(request)
 
         # 2. Origin check for state-changing requests
@@ -190,7 +190,7 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
             is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
             set_session_cookie(response, new_session_id, secure=is_secure)
 
-        if path == "/" or path.startswith("/static/"):
+        if path in ("/", "/app", "/app/") or path.startswith("/static/"):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
@@ -214,11 +214,50 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
         return {"status": "ok", "app": "TeleVault"}
 
     @app.get("/")
-    async def root():
+    async def root() -> Response:
+        landing_file = static_dir / "landing.html"
+        if landing_file.is_file():
+            return FileResponse(landing_file)
         index_file = static_dir / "index.html"
-        if index_file.exists():
+        if index_file.is_file():
             return FileResponse(index_file)
-        return {"status": "ok", "app": "TeleVault Web Dashboard"}
+        return JSONResponse({"status": "ok", "app": "TeleVault Web Dashboard"})
+
+    @app.get("/app")
+    @app.get("/app/")
+    async def app_dashboard() -> Response:
+        index_file = static_dir / "index.html"
+        if index_file.is_file():
+            return FileResponse(index_file)
+        return JSONResponse({"status": "ok", "app": "TeleVault Web Dashboard"})
+
+    @app.get("/robots.txt")
+    async def robots_txt() -> Response:
+        rf = static_dir / "robots.txt"
+        if rf.is_file():
+            return FileResponse(rf, media_type="text/plain; charset=utf-8")
+        return PlainTextResponse("User-agent: *\nAllow: /\nAllow: /app\nSitemap: https://televault.madhudadi.in/sitemap.xml\n")
+
+    @app.get("/sitemap.xml")
+    async def sitemap_xml() -> Response:
+        sf = static_dir / "sitemap.xml"
+        if sf.is_file():
+            return FileResponse(sf, media_type="application/xml")
+        return PlainTextResponse('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://televault.madhudadi.in/</loc></url></urlset>', media_type="application/xml")
+
+    @app.get("/llms.txt")
+    async def llms_txt() -> Response:
+        lf = static_dir / "llms.txt"
+        if lf.is_file():
+            return FileResponse(lf, media_type="text/plain; charset=utf-8")
+        return PlainTextResponse("# TeleVault\nDirect browser streaming for Telegram.\n")
+
+    @app.get("/llms-full.txt")
+    async def llms_full_txt() -> Response:
+        lf = static_dir / "llms-full.txt"
+        if lf.is_file():
+            return FileResponse(lf, media_type="text/plain; charset=utf-8")
+        return PlainTextResponse("# TeleVault Full Documentation\n")
 
     @app.get("/api/status")
     async def status(request: Request):

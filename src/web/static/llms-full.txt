@@ -1,0 +1,42 @@
+# TeleVault: Full Architecture & Developer Guide
+
+> TeleVault is a high-performance web platform and CLI engine for streaming and downloading files from Telegram channels, groups, and direct chats using direct MTProto streaming and real-time chunked transfer.
+
+## 1. System Overview
+TeleVault acts as a direct bridge between Telegram's MTProto network and modern web browsers. Traditional Telegram download bots download files to a bot server's local disk first, bottlenecking at server disk space and bandwidth before serving files to users. TeleVault bypasses intermediate disk storage completely by streaming chunks directly from Telegram's data centers through FastAPI chunked transfer directly into the client's browser.
+
+## 2. Core Features & Capabilities
+- **Direct MTProto Browser Streaming**: Media chunks are fetched via Telethon/MTProto and streamed to client HTTP responses with standard HTTP 206 Partial Content Range support (enabling seeking in 4K/1080p video players).
+- **Zero Server Disk Footprint**: Media bytes pass through ephemeral memory buffers and are never persisted to the hosting server's storage drives, eliminating storage exhaustion and privacy leakage.
+- **Instant Dynamic ZIP Generation**: Select multiple media files in a channel or chat and export them as a single `.zip` stream assembled on the fly without staging files.
+- **Multi-Tenant QR & SMS Authentication**: Each visitor receives an isolated 256-bit session cookie (`televault_session`). Visitors authenticate with their own Telegram accounts via QR code scanning or SMS OTP + 2FA password. Credentials and Telethon sessions remain fully isolated per user.
+- **SQLite Metadata Manifest**: Fast local indexing of dialogs, message history, and media manifests with support for resume and integrity validation.
+- **Rich Telemetry & Real-Time Concurrency HUD**: Live WebSocket (`/ws/live`) updates streaming download speed, percentage, ETA, and active worker slots with terminal log streaming.
+
+## 3. Architecture & Tech Stack
+- **Backend**: Python 3.10+ (tested on Python 3.14), FastAPI, Starlette, Uvicorn, Telethon (MTProto client), aiosqlite, asyncio.
+- **Frontend**: Vanilla HTML5, CSS3 Glassmorphism design tokens (Obsidian Dark, WCAG 2.2 AAA compliant), ES6 JavaScript. Zero third-party CDN scripts or fonts.
+- **Security**: Ephemeral tokens, CSRF origin verification, TrustedHostMiddleware, HttpOnly SameSite=Lax cookies, Content Security Policy with sandbox and nosniff headers.
+
+## 4. Key Endpoints & Routes
+- `GET /`: High-converting landing page with technical feature breakdown, comparison matrix, interactive dashboard simulation, and Schema.org structured data.
+- `GET /app`: Full multi-tenant web application dashboard for Telegram file exploration, streaming, and downloading.
+- `GET /api/health`: Health check endpoint.
+- `GET /api/status`: System and authentication status.
+- `POST /api/auth/phone/send_code`: Phone login initialization.
+- `POST /api/auth/phone/sign_in`: SMS code & 2FA sign in.
+- `POST /api/auth/qr/start`: Start QR code authentication flow.
+- `GET /api/auth/qr/status`: Poll QR code scan state.
+- `GET /api/dialogs`: List user channels, groups, and direct chats.
+- `GET /api/download/direct`: Direct single-file MTProto stream.
+- `POST /api/download/direct_zip`: On-the-fly multi-file ZIP stream.
+- `WS /ws/live`: Real-time download progress and HUD telemetry.
+- `GET /robots.txt`: Search crawler indexing policy.
+- `GET /sitemap.xml`: XML sitemap for search engines.
+- `GET /llms.txt`: Summary documentation for AI models.
+- `GET /llms-full.txt`: Full technical documentation for AI models.
+
+## 5. Deployment & Open Source
+- **Repository**: https://github.com/madhu2456/TelegramFilesDownloader
+- **Production Host**: https://televault.madhudadi.in/
+- **License**: MIT

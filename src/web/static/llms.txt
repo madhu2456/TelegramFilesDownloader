@@ -1,0 +1,17 @@
+# TeleVault
+
+> TeleVault is an open-source, multi-tenant web application and MTProto downloader enabling direct browser streaming, on-the-fly streaming ZIP packaging, and batch media downloads from Telegram channels, groups, and direct chats without storing files on intermediate server disks.
+
+## Core Capabilities
+- **Direct Browser Streaming**: Stream Telegram video, audio, and documents (up to 4GB Telegram Premium limit) directly into browser memory/disk via HTTP chunked transfer and range requests.
+- **Zero Server Storage**: Zero persistent disk footprint on the host server; media packets flow directly from Telegram MTProto network to client browser.
+- **On-the-Fly Streaming ZIP**: Multi-file downloads packaged into a single uncompressed ZIP stream dynamically in memory.
+- **Multi-Tenant Isolation**: Secure visitor session cookies (`televault_session`) with per-user Telegram client sessions and isolated credentials.
+- **Authentication**: Supports QR code scanning and phone number/SMS/2FA authentication.
+- **SQLite Manifest**: Local tracking of media items, download states, and metadata indexing.
+
+## Key Links & Endpoints
+- [TeleVault Landing Page](https://televault.madhudadi.in/): Public overview and feature breakdown.
+- [TeleVault Web App](https://televault.madhudadi.in/app): Interactive web dashboard and downloader UI.
+- [Full LLM Documentation](https://televault.madhudadi.in/llms-full.txt): Comprehensive architectural and developer guide.
+- [GitHub Repository](https://github.com/madhu2456/TelegramFilesDownloader): Open-source source code and issue tracker.

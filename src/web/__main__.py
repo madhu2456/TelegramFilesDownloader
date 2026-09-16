@@ -52,7 +52,7 @@ def main():
     port = env_port if env_port > 0 else find_available_port(8000, 50)
     token = init_security()
     source = get_token_source()
-    url = f"http://127.0.0.1:{port}/?token={token}"
+    url = f"http://127.0.0.1:{port}/app?token={token}"
     print("=" * 60)
     print(" TeleVault Modern Web Dashboard ")
     print(f" Web UI: {url}")

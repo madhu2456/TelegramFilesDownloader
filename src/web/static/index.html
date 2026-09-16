@@ -7,13 +7,13 @@
   <meta name="referrer" content="no-referrer">
   <title>TeleVault | Modern Web Dashboard</title>
   <meta name="description" content="TeleVault: Secure, high-speed Telegram media downloader and vault. Stream, extract, and download Telegram chats, channels, and files directly to your browser.">
-  <link rel="canonical" href="https://televault.madhudadi.in/">
+  <link rel="canonical" href="https://televault.madhudadi.in/app">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://televault.madhudadi.in/">
+  <meta property="og:url" content="https://televault.madhudadi.in/app">
   <meta property="og:title" content="TeleVault | Modern Web Dashboard">
   <meta property="og:description" content="Secure, high-speed Telegram media downloader and vault. Stream, extract, and download Telegram files directly in your browser.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://televault.madhudadi.in/">
+  <meta name="twitter:url" content="https://televault.madhudadi.in/app">
   <meta name="twitter:title" content="TeleVault | Modern Web Dashboard">
   <meta name="twitter:description" content="Secure, high-speed Telegram media downloader and vault. Stream, extract, and download Telegram files directly in your browser.">
   <link rel="stylesheet" href="/static/styles.css?v=0.4.1">
@@ -24,10 +24,12 @@
 <body>
   <!-- Header Bar -->
   <header>
-    <div class="logo">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Tele<span>Vault</span>
-    </div>
+    <a href="/" class="header-logo-link" style="text-decoration:none; color:inherit;" aria-label="TeleVault Home">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Tele<span>Vault</span>
+      </div>
+    </a>
     <div class="header-status">
       <div class="pill token-pill" id="tokenPill" style="display:none;" onclick="openTokenModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTokenModal();}" role="button" tabindex="0" title="Manage master access token" aria-label="Access Token Settings" aria-haspopup="dialog">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>

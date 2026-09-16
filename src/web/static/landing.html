@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>TeleVault | Stream &amp; Download Telegram Files Online (2GB+)</title>
+  <meta name="description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+  <link rel="canonical" href="https://televault.madhudadi.in/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://televault.madhudadi.in/">
+  <meta property="og:title" content="TeleVault | Stream &amp; Download Telegram Files Online (2GB+)">
+  <meta property="og:description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://televault.madhudadi.in/">
+  <meta name="twitter:title" content="TeleVault | Stream &amp; Download Telegram Files Online (2GB+)">
+  <meta name="twitter:description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://televault.madhudadi.in/#webapp",
+        "name": "TeleVault",
+        "url": "https://televault.madhudadi.in/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "All",
+        "browserRequirements": "Requires JavaScript. Requires HTML5.",
+        "description": "Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Direct browser streaming via MTProto",
+          "Zero server disk storage",
+          "On-the-fly multi-file streaming ZIP",
+          "Up to 4GB file support",
+          "Multi-tenant QR and SMS authentication",
+          "Channel and chat media extraction"
+        ]
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://televault.madhudadi.in/#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://televault.madhudadi.in/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "App",
+            "item": "https://televault.madhudadi.in/app"
+          }
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://televault.madhudadi.in/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Can I download Telegram files larger than 2GB without Telegram Premium?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Standard Telegram accounts can download files up to 2GB, while Telegram Premium accounts can download files up to 4GB. TeleVault supports the maximum file size permitted by your Telegram account tier through direct MTProto multi-part chunk streaming."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does TeleVault store my downloaded files or chat history on its servers?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram's MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does TeleVault stream files directly to the browser?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "TeleVault connects directly to Telegram's distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I download multiple Telegram files together as a single ZIP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. TeleVault features an on-the-fly streaming ZIP engine. You can select multiple media files or documents in any chat or channel, and TeleVault packages them into an uncompressed ZIP archive stream in real time without creating temporary files on the server."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it safe to log in with my Telegram account on TeleVault?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. TeleVault uses official Telegram MTProto authentication via QR code scanning or SMS verification code with optional 2FA. Your session is protected by an isolated 256-bit visitor session cookie, and TeleVault never exposes your credentials."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How is TeleVault different from Telegram downloader bots?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Traditional Telegram bots run into severe file size limitations (often 20MB or 50MB for bots), download files to intermediate third-party servers, and throttle download speeds. TeleVault acts as a direct client connecting directly to Telegram MTProto, enabling full bandwidth, 2GB to 4GB downloads, and zero intermediate server storage."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg-canvas: #0B0E14;
+      --surface-card: #131822;
+      --surface-elevated: #161F2E;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(0, 229, 255, 0.3);
+      --accent-cyan: #00E5FF;
+      --accent-cyan-hover: #33EBFF;
+      --accent-purple: #A855F7;
+      --accent-emerald: #10B981;
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --text-tertiary: #78889E;
+      --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      overflow-x: clip;
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-system);
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    a:hover {
+      color: var(--accent-cyan-hover);
+    }
+
+    a:focus-visible, button:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent-cyan);
+      outline-offset: 2px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      border: 1px solid transparent;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background-color: #00E5FF;
+      color: #0B0E14;
+      border-color: #00E5FF;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.25);
+    }
+
+    .btn-primary:hover {
+      background-color: #33EBFF;
+      color: #0B0E14;
+      box-shadow: 0 0 28px rgba(0, 229, 255, 0.4);
+    }
+
+    .btn-secondary {
+      background-color: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      border-color: var(--border-subtle);
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #FFFFFF;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-lg {
+      padding: 0.95rem 2rem;
+      font-size: 1.05rem;
+      border-radius: 10px;
+    }
+
+    .btn-sm {
+      padding: 0.45rem 1rem;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Navbar */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background-color: rgba(11, 14, 20, 0.85);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.85rem 0;
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .brand span {
+      color: var(--accent-cyan);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 5rem 0 3.5rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 9999px;
+      background-color: rgba(0, 229, 255, 0.08);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      color: var(--accent-cyan);
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0 auto 1.25rem;
+      max-width: 900px;
+      background: linear-gradient(135deg, #FFFFFF 30%, var(--accent-cyan) 80%, var(--accent-purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--text-secondary);
+      max-width: 680px;
+      margin: 0 auto 2.2rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+    }
+
+    .trust-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--text-tertiary);
+      font-weight: 500;
+    }
+
+    .trust-item svg {
+      color: var(--accent-emerald);
+      flex-shrink: 0;
+    }
+
+    /* Interactive Simulation Stage */
+    .simulation-section {
+      padding: 3rem 0;
+    }
+
+    .sim-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .sim-header {
+      background: var(--surface-elevated);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.8rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .sim-tabs {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .sim-tab-btn {
+      background: none;
+      border: 1px solid transparent;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .sim-tab-btn.active {
+      background: rgba(0, 229, 255, 0.1);
+      color: var(--accent-cyan);
+      border-color: rgba(0, 229, 255, 0.3);
+    }
+
+    .sim-body {
+      padding: 1.75rem;
+      min-height: 280px;
+    }
+
+    .sim-panel {
+      display: none;
+    }
+
+    .sim-panel.active {
+      display: block;
+    }
+
+    /* Sim Panel 1: Explorer */
+    .sim-file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .sim-file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+    }
+
+    .sim-file-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+
+    .sim-file-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sim-file-meta {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+    }
+
+    .badge-kind {
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+
+    /* Sim Panel 2: Streaming ZIP */
+    .zip-preview {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .progress-bar-wrap {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 9999px;
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .progress-bar-fill {
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+      height: 100%;
+      width: 76%;
+      border-radius: 9999px;
+    }
+
+    /* Sim Panel 3: Telemetry */
+    .hud-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      align-items: center;
+    }
+
+    .gauge-container {
+      aspect-ratio: 16 / 9;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface-elevated);
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      padding: 1rem;
+    }
+
+    .stat-box {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+    }
+
+    /* Section Headers */
+    .section-header {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 3rem;
+    }
+
+    .section-tag {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-cyan);
+      margin-bottom: 0.5rem;
+    }
+
+    .section-header h2 {
+      font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+      font-weight: 700;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.01em;
+    }
+
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    /* Bento Grid */
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+
+    .bento-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.75rem;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bento-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border-accent);
+    }
+
+    .bento-card.col-span-2 {
+      grid-column: span 2;
+    }
+
+    .bento-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      margin-bottom: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .bento-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .bento-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    /* Comparison Matrix */
+    .comparison-section {
+      padding: 3.5rem 0;
+    }
+
+    .comp-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+    }
+
+    .comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    .comp-table th, .comp-table td {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .comp-table th {
+      background: var(--surface-elevated);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .comp-table th.col-highlight {
+      background: rgba(0, 229, 255, 0.08);
+      color: var(--accent-cyan);
+      border-left: 1px solid var(--border-accent);
+      border-right: 1px solid var(--border-accent);
+    }
+
+    .comp-table td.col-highlight {
+      background: rgba(0, 229, 255, 0.03);
+      border-left: 1px solid var(--border-accent);
+      border-right: 1px solid var(--border-accent);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .comp-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .comp-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .comp-mobile-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .comp-mobile-card.highlight {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(0, 229, 255, 0.15);
+    }
+
+    .comp-mobile-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .comp-mobile-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .comp-mobile-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.4rem 0;
+      font-size: 0.85rem;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    }
+
+    .comp-mobile-row:last-child {
+      border-bottom: none;
+    }
+
+    .comp-mobile-row span:first-child {
+      color: var(--text-secondary);
+    }
+
+    /* How It Works Steps */
+    .steps-section {
+      padding: 3.5rem 0;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    .step-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 2rem 1.5rem;
+      position: relative;
+    }
+
+    .step-num {
+      position: absolute;
+      top: 1.25rem;
+      right: 1.25rem;
+      font-size: 2rem;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.06);
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .step-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(168, 85, 247, 0.1);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: var(--accent-purple);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .step-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem;
+    }
+
+    .step-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    /* FAQ Section */
+    .faq-section {
+      padding: 4rem 0;
+    }
+
+    .faq-list {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .faq-item {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s ease;
+    }
+
+    .faq-item[open] {
+      border-color: var(--border-accent);
+    }
+
+    .faq-question {
+      padding: 1.25rem 1.5rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .faq-question::-webkit-details-marker {
+      display: none;
+    }
+
+    .faq-question::after {
+      content: "+";
+      font-size: 1.25rem;
+      font-weight: 400;
+      color: var(--accent-cyan);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .faq-item[open] .faq-question::after {
+      content: "\2212";
+      transform: rotate(0deg);
+    }
+
+    .faq-answer {
+      padding: 0 1.5rem 1.25rem;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .faq-answer p {
+      margin: 0;
+    }
+
+    /* Bottom CTA Banner */
+    .bottom-cta-section {
+      padding: 4rem 0 5rem;
+    }
+
+    .cta-card {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%), var(--surface-card);
+      border: 1px solid var(--border-accent);
+      border-radius: 20px;
+      padding: 3.5rem 2rem;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(0, 229, 255, 0.1);
+    }
+
+    .cta-card h2 {
+      font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+      font-weight: 800;
+      margin: 0 0 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .cta-card p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 3.5rem 0 2rem;
+      background: #080A0F;
+      color: var(--text-tertiary);
+      font-size: 0.85rem;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 2.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .footer-brand h4 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0 0 0.75rem;
+    }
+
+    .footer-brand p {
+      color: var(--text-secondary);
+      margin: 0 0 1rem;
+      max-width: 360px;
+      line-height: 1.5;
+    }
+
+    .footer-col h5 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 1rem;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .footer-col a {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .footer-col a:hover {
+      color: var(--text-primary);
+    }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Responsive Containment & Mobile Reflow */
+    @media (max-width: 900px) {
+      .bento-grid {
+        grid-template-columns: 1fr;
+      }
+      .bento-card.col-span-2 {
+        grid-column: span 1;
+      }
+      .steps-grid {
+        grid-template-columns: 1fr;
+      }
+      .footer-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .nav-links {
+        display: none;
+      }
+      .hero {
+        padding: 3.5rem 0 2rem;
+      }
+      .hero-actions {
+        flex-direction: column;
+        width: 100%;
+      }
+      .hero-actions .btn {
+        width: 100%;
+      }
+      .trust-row {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .comp-table-wrap {
+        display: none;
+      }
+      .comp-cards-mobile {
+        display: flex;
+      }
+      .sim-body {
+        padding: 1rem;
+      }
+      .sim-file-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .live-dot, .progress-bar-fill {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Sticky Glass Navbar -->
+  <header class="navbar" role="banner">
+    <div class="container nav-inner">
+      <a href="/" class="brand" aria-label="TeleVault Home">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Tele<span>Vault</span>
+      </a>
+      <nav aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#simulation">Simulation</a></li>
+          <li><a href="#comparison">Comparison</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <a href="/app" class="btn btn-primary btn-sm" aria-label="Launch TeleVault Web Downloader">Launch App</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- 2. Hero Section -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container">
+        <div class="hero-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          Direct MTProto Browser Streaming &mdash; 0 Server Disk Storage
+        </div>
+        <h1 id="hero-title">Stream Telegram Media Directly to Your Browser</h1>
+        <p class="hero-sub">
+          Download videos, audio, and documents up to 4GB online with zero server disk storage. Stream channels directly to your device or export multi-file ZIPs on the fly.
+        </p>
+        <div class="hero-actions">
+          <a href="/app" class="btn btn-primary btn-lg" aria-label="Launch Web Downloader Application">Launch Web Downloader &rarr;</a>
+          <a href="#features" class="btn btn-secondary btn-lg" aria-label="Explore TeleVault Features">Explore Features</a>
+        </div>
+        <div class="trust-row" aria-label="Platform Highlights">
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>100% Zero Host Storage</span>
+          </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Up to 4GB Files</span>
+          </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Direct Browser Streaming</span>
+          </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Open Source MIT</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Interactive Live Simulation Section -->
+    <section class="simulation-section" id="simulation" aria-labelledby="sim-title">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">Interactive Preview</div>
+          <h2 id="sim-title">Experience TeleVault in Action</h2>
+          <p>Explore the browser-native file explorer, on-the-fly streaming ZIP generator, and real-time telemetry HUD.</p>
+        </div>
+        <div class="sim-card">
+          <div class="sim-header">
+            <div class="sim-tabs" role="tablist" aria-label="Preview Modes">
+              <button class="sim-tab-btn active" id="tab-browse" role="tab" aria-selected="true" aria-controls="panel-browse" onclick="showSimTab('browse')">Browse &amp; Extract</button>
+              <button class="sim-tab-btn" id="tab-zip" role="tab" aria-selected="false" aria-controls="panel-zip" onclick="showSimTab('zip')">Streaming ZIP</button>
+              <button class="sim-tab-btn" id="tab-hud" role="tab" aria-selected="false" aria-controls="panel-hud" onclick="showSimTab('hud')">Live Telemetry</button>
+            </div>
+            <div style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono); font-weight:600;">STATUS: READY</div>
+          </div>
+          <div class="sim-body">
+            <!-- Tab 1: Browse & Extract -->
+            <div class="sim-panel active" id="panel-browse" role="tabpanel" aria-labelledby="tab-browse">
+              <div class="sim-file-list">
+                <div class="sim-file-row">
+                  <div class="sim-file-info">
+                    <span class="badge-kind">Video</span>
+                    <div>
+                      <div class="sim-file-title">Docker_Masterclass_Complete_Course_1080p.mp4</div>
+                      <div class="sim-file-meta">1.84 GB &bull; ID #482019 &bull; Direct MTProto Stream</div>
+                    </div>
+                  </div>
+                  <a href="/app" class="btn btn-secondary btn-sm">Stream &darr;</a>
+                </div>
+                <div class="sim-file-row">
+                  <div class="sim-file-info">
+                    <span class="badge-kind" style="background:rgba(0,229,255,0.15); color:var(--accent-cyan); border-color:rgba(0,229,255,0.3);">Audio</span>
+                    <div>
+                      <div class="sim-file-title">Cybersecurity_Podcast_Episode_104_FLAC.flac</div>
+                      <div class="sim-file-meta">142 MB &bull; ID #482018 &bull; Instant Playback</div>
+                    </div>
+                  </div>
+                  <a href="/app" class="btn btn-secondary btn-sm">Stream &darr;</a>
+                </div>
+                <div class="sim-file-row">
+                  <div class="sim-file-info">
+                    <span class="badge-kind" style="background:rgba(16,185,129,0.15); color:var(--accent-emerald); border-color:rgba(16,185,129,0.3);">Document</span>
+                    <div>
+                      <div class="sim-file-title">System_Architecture_Blueprint_2026.pdf</div>
+                      <div class="sim-file-meta">48.2 MB &bull; ID #482017 &bull; Zero Server Disk</div>
+                    </div>
+                  </div>
+                  <a href="/app" class="btn btn-secondary btn-sm">Download &darr;</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: Streaming ZIP -->
+            <div class="sim-panel" id="panel-zip" role="tabpanel" aria-labelledby="tab-zip">
+              <div class="zip-preview">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="color:var(--text-primary); font-size:0.95rem;">Packing On-The-Fly ZIP Archive</strong>
+                    <div style="font-size:0.8rem; color:var(--text-tertiary);">4 files selected &bull; Assembling uncompressed ZIP stream dynamically</div>
+                  </div>
+                  <div style="font-family:var(--font-mono); color:var(--accent-cyan); font-weight:700; font-size:1.1rem;">76%</div>
+                </div>
+                <div class="progress-bar-wrap">
+                  <div class="progress-bar-fill"></div>
+                </div>
+                <div style="font-size:0.8rem; color:var(--text-secondary); display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+                  <span>Transferred: 1.42 GB / 1.86 GB</span>
+                  <span>Speed: 21.4 MB/s</span>
+                  <span>Server Storage: 0 MB Used</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 3: Live Telemetry -->
+            <div class="sim-panel" id="panel-hud" role="tabpanel" aria-labelledby="tab-hud">
+              <div class="hud-preview">
+                <div class="gauge-container">
+                  <svg width="120" height="70" viewBox="0 0 120 70" aria-hidden="true">
+                    <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="10" stroke-linecap="round"/>
+                    <path d="M 10 65 A 50 50 0 0 1 95 25" fill="none" stroke="#00E5FF" stroke-width="10" stroke-linecap="round"/>
+                  </svg>
+                  <div style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan); font-size:1.1rem; margin-top:0.25rem;">24.8 MB/s</div>
+                  <div style="font-size:0.7rem; color:var(--text-tertiary); text-transform:uppercase;">Download Speed</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Active Worker Slots</div>
+                  <div class="stat-value">4 / 4</div>
+                  <div style="font-size:0.75rem; color:var(--accent-emerald); margin-top:0.25rem;">Concurrent MTProto</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">Estimated Time Left</div>
+                  <div class="stat-value">00:18s</div>
+                  <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.25rem;">Chunk Transfer Stream</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Bento Grid (Features) -->
+    <section class="bento-section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">Core Capabilities</div>
+          <h2 id="features-title">Engineered for Massive Telegram Media</h2>
+          <p>Direct MTProto protocol streaming removes server disk bottlenecks and empowers direct browser extraction.</p>
+        </div>
+        <div class="bento-grid">
+          <!-- Bento 1 -->
+          <div class="bento-card col-span-2">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <h3>Direct MTProto Browser Streaming</h3>
+            <p>Stream large video files, audio tracks, and archives straight into your browser via HTTP 206 partial content range requests. Seek forward and backward in 1080p and 4K video players instantly without downloading the entire file first.</p>
+          </div>
+          <!-- Bento 2 -->
+          <div class="bento-card">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <h3>Zero Server Disk Footprint</h3>
+            <p>Media packets pass through ephemeral memory buffers directly from Telegram data centers to your browser. Zero bytes are stored on host disk drives.</p>
+          </div>
+          <!-- Bento 3 -->
+          <div class="bento-card">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            </div>
+            <h3>On-The-Fly Streaming ZIP</h3>
+            <p>Select multiple files across any channel and export them into a single uncompressed ZIP stream dynamically packaged on the fly with no temporary files.</p>
+          </div>
+          <!-- Bento 4 -->
+          <div class="bento-card col-span-2">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h3>Multi-Tenant QR &amp; SMS Auth</h3>
+            <p>Sign in privately with your own Telegram credentials using standard QR code scanning or SMS OTP with full 2FA support. Every visitor is assigned an isolated 256-bit session cookie with zero shared state or credential leaks.</p>
+          </div>
+          <!-- Bento 5 -->
+          <div class="bento-card">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            </div>
+            <h3>SQLite Metadata Manifest</h3>
+            <p>Fast local indexing catalogs dialogs, history, and files for instant search, filtering by media kind, and resumable downloads.</p>
+          </div>
+          <!-- Bento 6 -->
+          <div class="bento-card">
+            <div class="bento-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M16 12l-4-4-4 4M12 16V8"/></svg>
+            </div>
+            <h3>Up to 4GB File Support</h3>
+            <p>Bypass the 20MB and 50MB limitations of standard Telegram bots. Full support for 2GB standard accounts and 4GB Telegram Premium uploads.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Comparison Matrix -->
+    <section class="comparison-section" id="comparison" aria-labelledby="comp-title">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">Direct Comparison</div>
+          <h2 id="comp-title">TeleVault vs Other Download Methods</h2>
+          <p>See why direct MTProto streaming outperforms conventional bots and web services.</p>
+        </div>
+
+        <!-- Desktop Table View -->
+        <div class="comp-table-wrap">
+          <table class="comp-table">
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col" class="col-highlight">TeleVault</th>
+                <th scope="col">Telegram Bots</th>
+                <th scope="col">Generic Web Downloaders</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Max File Size</td>
+                <td class="col-highlight">Up to 4GB (Premium) / 2GB (Free)</td>
+                <td>20 MB &ndash; 50 MB (Bot API Cap)</td>
+                <td>Varies (usually 500 MB &ndash; 1 GB)</td>
+              </tr>
+              <tr>
+                <td>Host Disk Storage</td>
+                <td class="col-highlight">0 Bytes (Direct Stream)</td>
+                <td>Staged on Bot Server</td>
+                <td>Staged on Third-Party Disk</td>
+              </tr>
+              <tr>
+                <td>Multi-File Dynamic ZIP</td>
+                <td class="col-highlight">Instant On-the-Fly Stream</td>
+                <td>Not Supported</td>
+                <td>Slow Server ZIP Compression</td>
+              </tr>
+              <tr>
+                <td>Browser Video Playback</td>
+                <td class="col-highlight">Instant Seeking (RFC 7233)</td>
+                <td>Requires Complete Download</td>
+                <td>Heavy Buffering / Transcoding</td>
+              </tr>
+              <tr>
+                <td>Privacy &amp; Isolation</td>
+                <td class="col-highlight">256-Bit Visitor Session Isolation</td>
+                <td>Shared Bot Chats / Public Storage</td>
+                <td>Ad Trackers &amp; Data Logging</td>
+              </tr>
+              <tr>
+                <td>License &amp; Source</td>
+                <td class="col-highlight">100% Open Source (MIT)</td>
+                <td>Closed Source / Proprietary</td>
+                <td>Commercial / Ad-Supported</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Card Stack View -->
+        <div class="comp-cards-mobile" aria-label="Comparison Cards">
+          <div class="comp-mobile-card highlight">
+            <div class="comp-mobile-header">
+              <h3 style="color:var(--accent-cyan);">TeleVault (Recommended)</h3>
+              <span class="badge-kind" style="background:rgba(0,229,255,0.15); color:var(--accent-cyan); border-color:var(--border-accent);">Direct</span>
+            </div>
+            <div class="comp-mobile-row"><span>Max File Size</span><strong>Up to 4GB</strong></div>
+            <div class="comp-mobile-row"><span>Host Disk Storage</span><strong>0 Bytes</strong></div>
+            <div class="comp-mobile-row"><span>Dynamic ZIP</span><strong>Instant Stream</strong></div>
+            <div class="comp-mobile-row"><span>Video Playback</span><strong>Instant Seek (HTTP 206)</strong></div>
+            <div class="comp-mobile-row"><span>Privacy</span><strong>256-bit Isolated Session</strong></div>
+            <div class="comp-mobile-row"><span>License</span><strong>Open Source (MIT)</strong></div>
+          </div>
+
+          <div class="comp-mobile-card">
+            <div class="comp-mobile-header">
+              <h3>Telegram Bots</h3>
+              <span style="font-size:0.75rem; color:var(--text-tertiary);">Bot API</span>
+            </div>
+            <div class="comp-mobile-row"><span>Max File Size</span><span>20 MB &ndash; 50 MB</span></div>
+            <div class="comp-mobile-row"><span>Host Disk Storage</span><span>Staged on Bot Server</span></div>
+            <div class="comp-mobile-row"><span>Dynamic ZIP</span><span>Not Supported</span></div>
+            <div class="comp-mobile-row"><span>Video Playback</span><span>Download First</span></div>
+            <div class="comp-mobile-row"><span>Privacy</span><span>Shared Public Chats</span></div>
+            <div class="comp-mobile-row"><span>License</span><span>Closed Source</span></div>
+          </div>
+
+          <div class="comp-mobile-card">
+            <div class="comp-mobile-header">
+              <h3>Generic Web Downloaders</h3>
+              <span style="font-size:0.75rem; color:var(--text-tertiary);">Third-Party</span>
+            </div>
+            <div class="comp-mobile-row"><span>Max File Size</span><span>500 MB &ndash; 1 GB</span></div>
+            <div class="comp-mobile-row"><span>Host Disk Storage</span><span>Staged on Disk</span></div>
+            <div class="comp-mobile-row"><span>Dynamic ZIP</span><span>Slow Compression</span></div>
+            <div class="comp-mobile-row"><span>Video Playback</span><span>Heavy Buffering</span></div>
+            <div class="comp-mobile-row"><span>Privacy</span><span>Ad Trackers</span></div>
+            <div class="comp-mobile-row"><span>License</span><span>Commercial / Closed</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. How It Works -->
+    <section class="steps-section" id="how-it-works" aria-labelledby="steps-title">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">Workflow</div>
+          <h2 id="steps-title">How TeleVault Works</h2>
+          <p>Get started in seconds with our streamlined 3-step download process.</p>
+        </div>
+        <div class="steps-grid">
+          <div class="step-card">
+            <div class="step-num">01</div>
+            <div class="step-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h3>Connect Account</h3>
+            <p>Log in securely via Telegram QR code scan or SMS code verification. Your session remains strictly isolated and protected in your browser.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">02</div>
+            <div class="step-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3>Select Chats &amp; Media</h3>
+            <p>Browse your dialogs, private channels, and groups. Filter files by kind (videos, audio, documents) or search by message text and dates.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">03</div>
+            <div class="step-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <h3>Stream &amp; Download</h3>
+            <p>Stream media directly to your browser player with seekable playback, or download multiple items as an on-the-fly streaming ZIP archive.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Semantic FAQ Accordion -->
+    <section class="faq-section" id="faq" aria-labelledby="faq-title">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">Frequently Asked Questions</div>
+          <h2 id="faq-title">Frequently Asked Questions</h2>
+          <p>Everything you need to know about TeleVault streaming, limits, and security.</p>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-question">Can I download Telegram files larger than 2GB without Telegram Premium?</summary>
+            <div class="faq-answer">
+              <p>Standard Telegram accounts can download files up to 2GB, while Telegram Premium accounts can download files up to 4GB. TeleVault supports the maximum file size permitted by your Telegram account tier through direct MTProto multi-part chunk streaming.</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">Does TeleVault store my downloaded files or chat history on its servers?</summary>
+            <div class="faq-answer">
+              <p>No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram's MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage.</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">How does TeleVault stream files directly to the browser?</summary>
+            <div class="faq-answer">
+              <p>TeleVault connects directly to Telegram's distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading.</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">Can I download multiple Telegram files together as a single ZIP?</summary>
+            <div class="faq-answer">
+              <p>Yes. TeleVault features an on-the-fly streaming ZIP engine. You can select multiple media files or documents in any chat or channel, and TeleVault packages them into an uncompressed ZIP archive stream in real time without creating temporary files on the server.</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">Is it safe to log in with my Telegram account on TeleVault?</summary>
+            <div class="faq-answer">
+              <p>Yes. TeleVault uses official Telegram MTProto authentication via QR code scanning or SMS verification code with optional 2FA. Your session is protected by an isolated 256-bit visitor session cookie, and TeleVault never exposes your credentials.</p>
+            </div>
+          </details>
+
+          <details class="faq-item">
+            <summary class="faq-question">How is TeleVault different from Telegram downloader bots?</summary>
+            <div class="faq-answer">
+              <p>Traditional Telegram bots run into severe file size limitations (often 20MB or 50MB for bots), download files to intermediate third-party servers, and throttle download speeds. TeleVault acts as a direct client connecting directly to Telegram MTProto, enabling full bandwidth, 2GB to 4GB downloads, and zero intermediate server storage.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Bottom CTA Banner -->
+    <section class="bottom-cta-section" aria-labelledby="cta-heading">
+      <div class="container">
+        <div class="cta-card">
+          <h2 id="cta-heading">Ready to Stream &amp; Download Telegram Files?</h2>
+          <p>Experience zero-disk browser streaming with full MTProto speed and complete session privacy.</p>
+          <a href="/app" class="btn btn-primary btn-lg" aria-label="Launch Web Downloader Application Now">Launch Web Downloader &rarr;</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 9. Semantic Footer -->
+  <footer class="footer" role="contentinfo">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <h4>Tele<span>Vault</span></h4>
+          <p>High-performance direct browser streaming and MTProto downloader for Telegram media up to 4GB with zero server disk footprint.</p>
+          <div style="color:var(--text-tertiary); font-size:0.8rem;">
+            Privacy Pledge: Zero logs, zero file storage on host, direct client-to-Telegram MTProto streaming.
+          </div>
+        </div>
+        <div class="footer-col">
+          <h5>Navigation</h5>
+          <ul>
+            <li><a href="/app">Web App</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#simulation">Simulation</a></li>
+            <li><a href="#comparison">Comparison</a></li>
+            <li><a href="#faq">FAQ</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Open Source</h5>
+          <ul>
+            <li><a href="https://github.com/madhu2456/TelegramFilesDownloader" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+            <li><a href="/robots.txt">Robots.txt</a></li>
+            <li><a href="/sitemap.xml">Sitemap</a></li>
+            <li><a href="/llms.txt">LLM Docs</a></li>
+            <li><a href="/llms-full.txt">Full Tech Spec</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div>&copy; 2026 TeleVault. Released under the MIT License.</div>
+        <div style="font-size:0.8rem; color:var(--text-tertiary);">Designed for high-speed Telegram media workflows.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function showSimTab(tabId) {
+      document.querySelectorAll('.sim-tab-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+      document.querySelectorAll('.sim-panel').forEach(function(panel) {
+        panel.classList.remove('active');
+      });
+      var targetBtn = document.getElementById('tab-' + tabId);
+      var targetPanel = document.getElementById('panel-' + tabId);
+      if (targetBtn && targetPanel) {
+        targetBtn.classList.add('active');
+        targetPanel.classList.add('active');
+      }
+    }
+
+    // Forward query parameters (such as ?token=...) to /app CTA buttons
+    if (window.location.search) {
+      document.querySelectorAll('a[href="/app"]').forEach(function(a) {
+        a.href = '/app' + window.location.search;
+      });
+    }
+  </script>
+</body>
+</html>

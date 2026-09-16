@@ -9,6 +9,10 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
 ## Features
 
 ### TeleVault Web Dashboard
+- **Marketing Landing Page & Web App Routing Split (`/` vs `/app`)**:
+  - **High-Speed Landing Page (`GET /`)**: Zero-dependency Obsidian Dark Glassmorphism marketing showcase highlighting direct MTProto browser streaming, on-the-fly streaming ZIP packaging, zero server disk footprint, interactive simulation HUD, technical comparison matrix, and semantic FAQ accordion.
+  - **Interactive Web Dashboard (`GET /app`)**: Dedicated application route for Telegram multi-tenant authentication, chat exploration, direct browser file extraction, and streaming media downloads.
+  - **SERP SEO & AI Discovery Infrastructure**: Full Schema.org JSON-LD graph (`WebApplication`, `FAQPage`, `BreadcrumbList`), strict-budget meta tags, zero external CDN dependencies, and standard AI crawler endpoints (`/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt`) with crawler cookie isolation.
 - **Zero-Build Architecture**: FastAPI backend + Vanilla HTML5/CSS3/ES6 Dark Obsidian Glassmorphism UI — zero Node.js/npm dependencies required.
 - **Pure-Python In-Memory SVG QR Code Engine**: Built-in SVG QR code generation (`qrcode.image.svg.SvgPathImage`) without PIL/Pillow or C-extension image dependencies, guaranteeing pure in-memory rendering and zero external HTTP telemetry or third-party exfiltration of session credentials.
 - **WCAG 2.2 AA Obsidian Dark Glassmorphism Design System**: Desktop-first UI featuring an `#0B0E14` Obsidian canvas with frosted glass panels and high-contrast glowing accents:
@@ -40,7 +44,7 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
   - **Cross-Platform Compatibility**: Full PKWARE compliance with UTF-8 filename encoding (Bit 11 flag `0x0808`), Unix file attributes (`0o644`), automatic collision deduplication (`{name}_{msg_id}.ext`), and 32-bit local headers guaranteed to open cleanly in Windows Explorer, macOS Archive Utility, and Linux.
 
 ### Hardened Core & Security
-- **Multi-Tenant Architecture & Visitor Session Isolation**: Public visitors to `https://televault.madhudadi.in/` land directly on the dashboard without requiring an administrative master access token. Each visitor is assigned an isolated 256-bit `televault_session` cookie (`HttpOnly; SameSite=Lax; Path=/`), a sandboxed download directory (`out/sessions/<session_id>`), and an isolated Telethon session (`session/<session_id>.session`) strictly path-jailed against directory traversal.
+- **Multi-Tenant Architecture & Visitor Session Isolation**: Public visitors accessing the web dashboard (`/app` or launched from `/`) do not require an administrative master access token. Each visitor is assigned an isolated 256-bit `televault_session` cookie (`HttpOnly; SameSite=Lax; Path=/`), a sandboxed download directory (`out/sessions/<session_id>`), and an isolated Telethon session (`session/<session_id>.session`) strictly path-jailed against directory traversal. Discovery and crawler endpoints (`/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt`) bypass session middleware to prevent crawler cookie pollution.
 - **Bounded LRU Pool & Idle TTL Sweeper**: `SessionManager` manages a bounded pool of up to 25 concurrent active Telethon clients with automatic 15-minute idle TTL background reaping (preserving active downloads) and HTTP 503 capacity defense.
 - **Telegram Account Lifecycle & In-Browser Logout**: Public visitors log in via Phone SMS or QR code directly in the browser. Authenticated sessions show user profile in the header with an accessible `Log Out` button (`POST /api/auth/logout`) that cleanly terminates the Telethon session, unlinks `.session` storage, and resets client state.
 - **Concurrency & SQLite WAL Hardening**: Decoupled web server daemon lock (`session/.televault_server.pid`) permits simultaneous CLI executions. SQLite manifest and Telethon session databases operate in WAL mode (`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=10000; PRAGMA synchronous=NORMAL;`).
@@ -103,7 +107,7 @@ python run_web.py
 python -m src.web
 ```
 
-Upon first boot, a master token is persisted to `data/.token` (`chmod 600`) and output in the startup banner. On subsequent boots, the existing token is preserved and reused. Public visitors logging into Telegram no longer require a server master access token, landing directly on the dashboard with isolated, unblocked visitor sessions. Administrators navigating to the bare dashboard can click the **"Admin Access"** link in the footer or authenticate directly with `?token=<master_token>` (or `X-Auth-Token` header), which displays the active token pill in the header.
+Upon first boot, a master token is persisted to `data/.token` (`chmod 600`) and output in the startup banner. On subsequent boots, the existing token is preserved and reused. Root URL `http://127.0.0.1:8000/` serves the high-speed marketing landing page with direct browser streaming highlights, while the interactive web dashboard is accessible at `http://127.0.0.1:8000/app` (with standard AI crawler endpoints at `/llms.txt` and `/llms-full.txt`). Public visitors logging into Telegram no longer require a server master access token, operating with isolated, unblocked visitor sessions. Administrators navigating to the dashboard can click the **"Admin Access"** link in the footer or authenticate directly with `?token=<master_token>` (or `X-Auth-Token` header), which displays the active token pill in the header.
 
 ### Or Run via CLI
 

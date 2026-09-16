@@ -1093,3 +1093,232 @@ def test_direct_streaming_ui_and_storage_pill_removal():
     assert "Direct Browser Streaming Active" in js
     assert "Browse &amp; Download Files" in html
 
+
+def test_landing_page_routing_and_discovery_endpoints():
+    app = create_app()
+    client = TestClient(app)
+
+    # 1. Root / serves landing page with status 200
+    res_root = client.get("/")
+    assert res_root.status_code == 200
+    assert "Stream Telegram Media Directly to Your Browser" in res_root.text
+    assert res_root.headers.get("Cache-Control") == "no-cache, no-store, must-revalidate"
+
+    # 2. /app and /app/ serve dashboard index.html with status 200
+    # Since client already visited '/', it has cookie and should not re-issue set-cookie
+    res_app = client.get("/app")
+    assert res_app.status_code == 200
+    assert "TeleVault" in res_app.text
+    assert "Browse &amp; Download Files" in res_app.text or "mediaGrid" in res_app.text
+    assert res_app.headers.get("Cache-Control") == "no-cache, no-store, must-revalidate"
+    assert "set-cookie" not in res_app.headers
+
+    # A fresh visitor directly hitting /app gets issued a session cookie
+    fresh_app_client = TestClient(app)
+    res_fresh_app = fresh_app_client.get("/app")
+    assert res_fresh_app.status_code == 200
+    assert "televault_session=" in res_fresh_app.headers.get("set-cookie", "")
+
+    fresh_client = TestClient(app)
+    res_app_slash = fresh_client.get("/app/")
+    assert res_app_slash.status_code == 200
+    assert "TeleVault" in res_app_slash.text
+    assert res_app_slash.headers.get("Cache-Control") == "no-cache, no-store, must-revalidate"
+    assert "televault_session=" in fresh_client.cookies.get("televault_session", "") or "televault_session=" in res_app_slash.headers.get("set-cookie", "")
+
+    # 3. Discovery endpoints return 200 with proper media types and zero cookies
+    res_robots = client.get("/robots.txt")
+    assert res_robots.status_code == 200
+    assert "text/plain" in res_robots.headers.get("content-type", "")
+    assert "User-agent:" in res_robots.text
+    assert "Allow: /app" in res_robots.text
+    # Discovery endpoints must NOT have Set-Cookie header (crawler isolation)
+    assert "set-cookie" not in res_robots.headers
+
+    res_sitemap = client.get("/sitemap.xml")
+    assert res_sitemap.status_code == 200
+    assert "xml" in res_sitemap.headers.get("content-type", "")
+    assert "https://televault.madhudadi.in/" in res_sitemap.text
+    assert "https://televault.madhudadi.in/app" in res_sitemap.text
+    assert "set-cookie" not in res_sitemap.headers
+
+    res_llms = client.get("/llms.txt")
+    assert res_llms.status_code == 200
+    assert "text/plain" in res_llms.headers.get("content-type", "")
+    assert "TeleVault" in res_llms.text
+    assert "set-cookie" not in res_llms.headers
+
+    res_llms_full = client.get("/llms-full.txt")
+    assert res_llms_full.status_code == 200
+    assert "text/plain" in res_llms_full.headers.get("content-type", "")
+    assert "TeleVault: Full Architecture" in res_llms_full.text
+    assert "set-cookie" not in res_llms_full.headers
+
+
+def test_landing_faq_schema_parity():
+    import json
+    import re
+    from html.parser import HTMLParser
+
+    static_dir = Path(__file__).resolve().parent.parent / "src" / "web" / "static"
+    landing_html = (static_dir / "landing.html").read_text(encoding="utf-8")
+
+    # Extract JSON-LD script
+    json_ld_match = re.search(r'<script type="application/ld\+json">(.*?)</script>', landing_html, re.DOTALL)
+    assert json_ld_match is not None, "JSON-LD script tag missing in landing.html"
+    json_ld_data = json.loads(json_ld_match.group(1))
+
+    # Find FAQPage entity
+    faq_entity = None
+    for item in json_ld_data.get("@graph", []):
+        if item.get("@type") == "FAQPage":
+            faq_entity = item
+            break
+    assert faq_entity is not None, "FAQPage entity missing from JSON-LD graph"
+
+    schema_faqs: list[tuple[str, str]] = []
+    for q in faq_entity.get("mainEntity", []):
+        question = " ".join(q["name"].split())
+        answer = " ".join(q["acceptedAnswer"]["text"].split())
+        schema_faqs.append((question, answer))
+
+    assert len(schema_faqs) == 6, f"Expected 6 Schema FAQs, found {len(schema_faqs)}"
+
+    # Parse DOM FAQ items
+    class FAQDOMParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.faqs: list[tuple[str, str]] = []
+            self.current_q: list[str] = []
+            self.current_a: list[str] = []
+            self.in_summary = False
+            self.in_answer = False
+            self.in_details = False
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            attr_dict = dict(attrs)
+            classes = (attr_dict.get("class") or "").split()
+            if tag == "details" and "faq-item" in classes:
+                self.in_details = True
+                self.current_q = []
+                self.current_a = []
+            elif tag == "summary" and self.in_details:
+                self.in_summary = True
+            elif tag in ("div", "p") and "faq-answer" in classes:
+                self.in_answer = True
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag == "summary" and self.in_summary:
+                self.in_summary = False
+            elif tag == "details" and self.in_details:
+                q_text = " ".join("".join(self.current_q).split())
+                a_text = " ".join("".join(self.current_a).split())
+                self.faqs.append((q_text, a_text))
+                self.in_details = False
+                self.in_answer = False
+
+        def handle_data(self, data: str) -> None:
+            if self.in_summary:
+                self.current_q.append(data)
+            elif self.in_answer:
+                self.current_a.append(data)
+
+    dom_parser = FAQDOMParser()
+    dom_parser.feed(landing_html)
+    assert len(dom_parser.faqs) == 6, f"Expected 6 DOM FAQs, found {len(dom_parser.faqs)}"
+
+    for i, (s_q, s_a) in enumerate(schema_faqs):
+        d_q, d_a = dom_parser.faqs[i]
+        assert s_q == d_q, f"Question mismatch at index {i}:\nSchema: {s_q}\nDOM:    {d_q}"
+        assert s_a == d_a, f"Answer mismatch at index {i}:\nSchema: {s_a}\nDOM:    {d_a}"
+
+
+def test_landing_page_zero_cdn_and_accessibility():
+    static_dir = Path(__file__).resolve().parent.parent / "src" / "web" / "static"
+    landing_html = (static_dir / "landing.html").read_text(encoding="utf-8")
+
+    # Zero external CDN check
+    for forbidden_cdn in ("fonts.googleapis.com", "fonts.gstatic.com", "cdnjs.cloudflare.com", "unpkg.com", "jsdelivr.net"):
+        assert forbidden_cdn not in landing_html, f"External CDN reference found: {forbidden_cdn}"
+
+    # Verify canonical and meta tags
+    assert '<link rel="canonical" href="https://televault.madhudadi.in/">' in landing_html
+    assert 'name="description"' in landing_html
+
+    # Verify primary CTA links to /app
+    assert 'href="/app"' in landing_html
+    assert 'btn-primary' in landing_html
+
+    # Verify system font stack
+    assert "--font-system:" in landing_html
+    assert "-apple-system" in landing_html
+
+    # Verify WCAG AAA contrast tokens
+    assert "#00E5FF" in landing_html  # Cyan CTA
+    assert "#0B0E14" in landing_html  # Obsidian dark background
+    assert "#F8FAFC" in landing_html  # High contrast text
+
+    # Verify mobile containment CSS
+    assert "overflow-x: clip" in landing_html or "overflow-x: hidden" in landing_html
+    assert "box-sizing: border-box" in landing_html
+
+
+def test_landing_page_fallback_routing(monkeypatch):
+    """Verify fallback branches when static files are missing on disk."""
+    app = create_app()
+    client = TestClient(app)
+
+    orig_is_file = Path.is_file
+
+    # Case 1: landing.html is missing, fallback to index.html
+    def fake_is_file_no_landing(self: Path) -> bool:
+        if self.name == "landing.html":
+            return False
+        return orig_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", fake_is_file_no_landing)
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "Browse &amp; Download Files" in res.text or "mediaGrid" in res.text
+
+    # Case 2: both landing.html and index.html missing, fallback to JSON
+    def fake_is_file_none(self: Path) -> bool:
+        if self.name in ("landing.html", "index.html"):
+            return False
+        return orig_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", fake_is_file_none)
+    res_json = client.get("/")
+    assert res_json.status_code == 200
+    assert res_json.json() == {"status": "ok", "app": "TeleVault Web Dashboard"}
+
+    res_app_missing = client.get("/app")
+    assert res_app_missing.status_code == 200
+    assert res_app_missing.json() == {"status": "ok", "app": "TeleVault Web Dashboard"}
+
+    # Case 3: Discovery files missing, fallback to inline default responses
+    def fake_is_file_no_discovery(self: Path) -> bool:
+        if self.name in ("robots.txt", "sitemap.xml", "llms.txt", "llms-full.txt"):
+            return False
+        return orig_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", fake_is_file_no_discovery)
+    res_robots = client.get("/robots.txt")
+    assert res_robots.status_code == 200
+    assert "User-agent: *" in res_robots.text
+    assert "text/plain" in res_robots.headers.get("content-type", "")
+
+    res_sitemap = client.get("/sitemap.xml")
+    assert res_sitemap.status_code == 200
+    assert "xml" in res_sitemap.headers.get("content-type", "")
+    assert "https://televault.madhudadi.in/" in res_sitemap.text
+
+    res_llms = client.get("/llms.txt")
+    assert res_llms.status_code == 200
+    assert "# TeleVault" in res_llms.text
+
+    res_llms_full = client.get("/llms-full.txt")
+    assert res_llms_full.status_code == 200
+    assert "# TeleVault Full Documentation" in res_llms_full.text
+
+
