@@ -1451,3 +1451,15 @@ input:focus, select:focus {
   flex: 1;
   min-width: 0;
 }
+
+.admin-link-btn {
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.admin-link-btn:hover,
+.admin-link-btn:focus-visible {
+  color: var(--accent-cyan) !important;
+  opacity: 1 !important;
+  outline: none;
+}
+

@@ -40,15 +40,13 @@ function updateTokenPill() {
   const pill = document.getElementById('tokenPill');
   const text = document.getElementById('tokenPillText');
   if (!pill || !text) return;
-  pill.setAttribute('aria-label', token ? 'Access Token Settings: Token Active' : 'Access Token Settings: Token Missing');
-  if (token) {
+  if (token && token.trim()) {
+    pill.style.display = 'inline-flex';
     pill.classList.remove('missing');
     text.textContent = 'Token: Set';
     pill.title = 'Master access token is active. Click to view or change.';
   } else {
-    pill.classList.add('missing');
-    text.textContent = 'Token: Missing';
-    pill.title = 'Master access token is missing. Click to authenticate.';
+    pill.style.display = 'none';
   }
 }
 
@@ -162,10 +160,11 @@ window.fetch = async function(...args) {
 };
 
 function getHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'X-Auth-Token': token,
-  };
+  const headers = { 'Content-Type': 'application/json' };
+  if (token && token.trim()) {
+    headers['X-Auth-Token'] = token.trim();
+  }
+  return headers;
 }
 
 function escapeHtml(str) {
@@ -698,15 +697,6 @@ async function loadDialogs(kind = 'all') {
   const list = document.getElementById('dialogList');
   if (!list) return;
 
-  if (!token) {
-    list.innerHTML = `
-      <div style="padding:1.5rem 1rem; text-align:center;">
-        <div style="color:var(--accent-amber); font-size:0.85rem; margin-bottom:0.5rem;">Authentication token required.</div>
-        <div style="color:var(--text-muted); font-size:0.8rem;">Please open the dashboard link printed in your terminal (containing ?token=...).</div>
-      </div>
-    `;
-    return;
-  }
 
   list.innerHTML = `
     <div style="padding:2rem 1rem; text-align:center; color:var(--text-muted); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.75rem;">
@@ -981,14 +971,17 @@ async function loadMedia() {
 
     grid.innerHTML = mediaCache.map((item, idx) => {
       const isMissing = item.exists === false;
-      const streamUrlWithToken = `${item.stream_url}?token=${encodeURIComponent(token)}`;
+      const streamUrlWithToken = (token && token.trim())
+        ? `${item.stream_url}?token=${encodeURIComponent(token.trim())}`
+        : item.stream_url;
+      const downloadUrl = streamUrlWithToken + (streamUrlWithToken.includes('?') ? '&download=1' : '?download=1');
       const actionBar = isMissing
         ? `<div class="card-action-bar" onclick="event.stopPropagation();"><span class="card-action-btn disabled" title="File missing from disk" aria-disabled="true" style="opacity:0.4; cursor:not-allowed;">⚠️</span></div>`
         : `<div class="card-action-bar" onclick="event.stopPropagation();">
             <a href="${streamUrlWithToken}" target="_blank" rel="noopener noreferrer" class="card-action-btn" title="Open in browser" aria-label="Open ${escapeHtml(item.filename)} in new tab">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             </a>
-            <a href="${streamUrlWithToken}&download=1" download="${escapeHtml(item.filename)}" class="card-action-btn" title="Download file" aria-label="Download ${escapeHtml(item.filename)}">
+            <a href="${downloadUrl}" download="${escapeHtml(item.filename)}" class="card-action-btn" title="Download file" aria-label="Download ${escapeHtml(item.filename)}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </a>
           </div>`;
@@ -1040,9 +1033,11 @@ function openMediaLightboxByIndex(idx) {
   document.getElementById('lightboxMsgId').innerText = `#${item.msg_id || '--'}`;
   document.getElementById('lightboxSha').innerText = item.sha256 || 'N/A';
   
-  const streamUrlWithToken = `${item.stream_url}?token=${encodeURIComponent(token)}`;
+  const streamUrlWithToken = (token && token.trim())
+    ? `${item.stream_url}?token=${encodeURIComponent(token.trim())}`
+    : item.stream_url;
   const dlLink = document.getElementById('lightboxDownloadLink');
-  if (dlLink) dlLink.href = `${streamUrlWithToken}&download=1`;
+  if (dlLink) dlLink.href = streamUrlWithToken + (streamUrlWithToken.includes('?') ? '&download=1' : '?download=1');
   const openLink = document.getElementById('lightboxOpenLink');
   if (openLink) openLink.href = streamUrlWithToken;
 
@@ -1639,7 +1634,9 @@ async function downloadSelectedFilesAsZip() {
     const data = await res.json();
     const { ticket, suggested_filename, file_count, archive_size } = data;
 
-    const zipUrl = `/api/direct/zip/stream/${ticket}?token=${encodeURIComponent(token)}`;
+    const zipUrl = (token && token.trim())
+      ? `/api/direct/zip/stream/${ticket}?token=${encodeURIComponent(token.trim())}`
+      : `/api/direct/zip/stream/${ticket}`;
     console.log('[TeleVault] Starting ZIP download stream:', zipUrl);
 
     // Single-trigger: invisible iframe guarantees download initiation without popup blocker drops or duplicate downloads

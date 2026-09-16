@@ -777,3 +777,34 @@ async def test_master_token_bearer_precedence_over_visitor_cookie(tmp_path: Path
     assert cli is app.state.tg_client
     assert jm is app.state.job_manager
     assert out == Path(app.state.out_dir)
+
+
+def test_websocket_live_rehydration_and_unauthorized_rejection(tmp_path: Path):
+    """Verify WebSocket live telemetry rejects unauthorized connections with 1008 immediately and re-hydrates valid tenants."""
+    from fastapi import WebSocketDisconnect
+
+    from src.web.security import get_ephemeral_token
+
+    cfg = _make_config(tmp_path)
+    app = create_app(cfg)
+    client = TestClient(app)
+
+    # 1. Reject empty token and absent session cookie
+    with pytest.raises(WebSocketDisconnect) as exc_info, client.websocket_connect("/ws/live?token="):
+        pass
+    assert exc_info.value.code == 1008
+
+    # 2. Reject unknown session cookie without JIT creation
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect("/ws/live", cookies={SESSION_COOKIE_NAME: "sess_nonexistent_0123456789abcdef"}),
+    ):
+        pass
+    assert exc_info.value.code == 1008
+
+    # 3. Accept valid master token
+    token = get_ephemeral_token()
+    with client.websocket_connect(f"/ws/live?token={token}") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "INIT_STATE"
+

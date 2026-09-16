@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.config import Config, load_config, scrub_for_log
+from src.web.client_helpers import extract_master_token
 from src.web.job_manager import JobManager
 from src.web.routes_direct import router as direct_router
 from src.web.routes_jobs import router as jobs_router
@@ -135,13 +136,7 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
             client_ip = get_client_ip(request)
             limiter = get_auth_rate_limiter()
 
-            auth_header = request.headers.get("authorization")
-            bearer_token = auth_header.replace("Bearer ", "").strip() if auth_header else None
-            raw_token = (
-                request.headers.get("x-auth-token")
-                or request.query_params.get("token")
-                or bearer_token
-            )
+            raw_token = extract_master_token(request)
 
             if raw_token is not None:
                 if limiter.is_rate_limited(client_ip):

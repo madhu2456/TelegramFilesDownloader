@@ -11,13 +11,14 @@ from src.resolver import resolve_target
 from src.store import init_db
 from src.web.client_helpers import (
     _ensure_connected,
+    extract_master_token,
     get_session_client,
     get_session_job_manager,
     get_session_out_dir,
 )
 from src.web.job_manager import JobConflictError
 from src.web.security import verify_origin, verify_token
-from src.web.session_security import SESSION_COOKIE_NAME
+from src.web.session_security import SESSION_COOKIE_NAME, validate_session_id
 
 router = APIRouter()
 
@@ -120,8 +121,9 @@ async def get_download_state(request: Request):
 
 @router.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
-    token = websocket.query_params.get("token") or websocket.headers.get("x-auth-token")
-    session_id = websocket.cookies.get(SESSION_COOKIE_NAME)
+    token = extract_master_token(websocket)
+    raw_sid = websocket.cookies.get(SESSION_COOKIE_NAME)
+    session_id = raw_sid if validate_session_id(raw_sid) else None
     is_authed = False
     jm = None
 
@@ -130,29 +132,20 @@ async def websocket_live(websocket: WebSocket):
         jm = getattr(websocket.app.state, "job_manager", None)
     elif session_id:
         sm = getattr(websocket.app.state, "session_manager", None)
-        if sm and session_id in sm._sessions:
-            tenant = sm._sessions[session_id]
-            is_authed = True
-            jm = tenant.job_manager
+        if sm:
+            tenant = await sm.get_or_create_tenant(session_id, allow_jit=False)
+            if tenant:
+                is_authed = True
+                jm = tenant.job_manager
 
     if not is_authed or jm is None:
-        try:
-            await websocket.accept()
-            await websocket.send_json({"type": "SESSION_EXPIRED", "detail": "Session token invalid or expired"})
-            await websocket.close(code=1008, reason="Policy Violation: Invalid token")
-        except Exception:
-            pass
+        await websocket.close(code=1008, reason="Policy Violation: Authentication required")
         return
 
     origin = websocket.headers.get("origin")
     port = websocket.url.port or 8000
     if not verify_origin(origin, port):
-        try:
-            await websocket.accept()
-            await websocket.send_json({"type": "ORIGIN_FORBIDDEN", "detail": "Origin not allowed"})
-            await websocket.close(code=1008, reason="Policy Violation: Invalid origin")
-        except Exception:
-            pass
+        await websocket.close(code=1008, reason="Forbidden origin")
         return
 
     await websocket.accept()

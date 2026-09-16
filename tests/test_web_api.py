@@ -618,12 +618,9 @@ def test_ws_live_invalid_token_clean_1008(tmp_path: Path):
 
     with (
         pytest.raises(WebSocketDisconnect) as exc_info,
-        client.websocket_connect("/ws/live?token=invalid_token_xyz") as ws,
+        client.websocket_connect("/ws/live?token=invalid_token_xyz"),
     ):
-        msg = ws.receive_json()
-        assert msg["type"] == "SESSION_EXPIRED"
-        assert "Session token invalid" in msg["detail"]
-        ws.receive_json()
+        pass
     assert exc_info.value.code == 1008
 
 
@@ -643,12 +640,9 @@ def test_ws_live_invalid_origin_clean_1008(tmp_path: Path):
         client.websocket_connect(
             f"/ws/live?token={token}",
             headers={"origin": "http://evil-domain.com:8000"},
-        ) as ws,
+        ),
     ):
-        msg = ws.receive_json()
-        assert msg["type"] == "ORIGIN_FORBIDDEN"
-        assert "Origin not allowed" in msg["detail"]
-        ws.receive_json()
+        pass
     assert exc_info.value.code == 1008
 
 

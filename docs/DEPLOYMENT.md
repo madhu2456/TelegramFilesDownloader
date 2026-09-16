@@ -121,7 +121,7 @@ TeleVault provides multi-tenant public access alongside administrative master-to
    - Master token authentication (`X-Auth-Token` header or `?token=` parameter) retains strict precedence over visitor sessions. When a master token is supplied:
      - API requests operate against the root session (`TG_SESSION`) and root output directory (`TELEVAULT_OUT_DIR`).
      - Status monitoring (`/api/status`), administrative operations, and automated CI pipelines (`.github/workflows/deploy.yml`) continue executing without visitor interference.
-   - On first startup (when `TELEVAULT_TOKEN` is unset or empty), TeleVault generates a master token to `/app/data/.token` (`chmod 600`) or respects the `TELEVAULT_TOKEN` environment override.
+   - On first startup (when `TELEVAULT_TOKEN` is unset or empty), TeleVault generates a master token to `/app/data/.token` (`chmod 600`) or respects the `TELEVAULT_TOKEN` environment override. Administrators navigating to the bare dashboard can click **"Admin Access"** in the footer or visit with `?token=<master_token>` to authenticate and reveal the master token status pill.
 
 ### Step 2.4: Launch Container Stack
 Start the TeleVault stack using Docker Compose:

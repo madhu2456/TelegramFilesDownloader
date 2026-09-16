@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from starlette.requests import Request
+from starlette.websockets import WebSocket
 
 from src.web.security import verify_token
 from src.web.session_security import get_session_id_from_request
@@ -70,15 +71,19 @@ async def _resolve_peer_robust(client: Any, chat_id: Any) -> Any:
     return chat_id
 
 
-def extract_master_token(request: Request) -> str | None:
-    """Extract master access token from headers or query parameters with Bearer support."""
+def extract_master_token(request: Request | WebSocket) -> str | None:
+    """Extract master access token from headers or query parameters with Bearer support.
+    Returns stripped non-empty token string or None."""
     auth_header = request.headers.get("authorization")
-    bearer_token = auth_header.replace("Bearer ", "").strip() if auth_header else None
-    return (
-        request.headers.get("x-auth-token")
-        or request.query_params.get("token")
-        or bearer_token
-    )
+    bearer = auth_header.replace("Bearer ", "").strip() if auth_header else None
+    for cand in (
+        request.headers.get("x-auth-token"),
+        request.query_params.get("token"),
+        bearer,
+    ):
+        if cand and str(cand).strip():
+            return str(cand).strip()
+    return None
 
 
 async def get_session_client(request: Request, allow_jit: bool = False) -> Any:

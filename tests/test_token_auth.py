@@ -268,3 +268,53 @@ def test_token_persistence_env_var_override(monkeypatch: pytest.MonkeyPatch, iso
     assert isolate_token_environment.exists() is False
     assert verify_token(env_secret) is True
     assert verify_token("wrong_token") is False
+
+
+def test_extract_master_token_sanitization():
+    """Verify extract_master_token returns None for empty and whitespace strings across all sources."""
+    from starlette.requests import Request
+
+    from src.web.client_helpers import extract_master_token
+
+    # Empty string headers
+    req_empty = Request({"type": "http", "headers": [(b"x-auth-token", b"")], "query_string": b""})
+    assert extract_master_token(req_empty) is None
+
+    # Whitespace headers
+    req_space = Request({"type": "http", "headers": [(b"x-auth-token", b"   \t\n")], "query_string": b""})
+    assert extract_master_token(req_space) is None
+
+    # Empty query param
+    req_qp_empty = Request({"type": "http", "headers": [], "query_string": b"token="})
+    assert extract_master_token(req_qp_empty) is None
+
+    # Whitespace query param
+    req_qp_space = Request({"type": "http", "headers": [], "query_string": b"token=%20%20"})
+    assert extract_master_token(req_qp_space) is None
+
+    # Empty bearer
+    req_bearer = Request({"type": "http", "headers": [(b"authorization", b"Bearer ")], "query_string": b""})
+    assert extract_master_token(req_bearer) is None
+
+    # Valid token
+    req_valid = Request({"type": "http", "headers": [(b"x-auth-token", b"valid_sec_token")], "query_string": b""})
+    assert extract_master_token(req_valid) == "valid_sec_token"
+
+
+def test_empty_token_resilience_and_no_rate_limit(tmp_path: Path):
+    """Verify sending X-Auth-Token: '' or ?token= does not return 401 on public endpoints and does not increment rate limit."""
+    app = create_app()
+    client = TestClient(app)
+
+    visitor_headers = {"X-Forwarded-For": "192.0.2.123", "x-auth-token": "   "}
+
+    # Repeated requests with empty/whitespace token to public endpoint
+    for _ in range(15):
+        resp = client.get("/api/auth/me", headers=visitor_headers)
+        assert resp.status_code == 200
+        assert resp.json().get("authorized") is False or resp.json().get("status") in ("unauthenticated", "ok")
+
+    # Verify rate limiter did not record failures for this IP
+    resp_health = client.get("/api/health", headers=visitor_headers)
+    assert resp_health.status_code == 200
+
