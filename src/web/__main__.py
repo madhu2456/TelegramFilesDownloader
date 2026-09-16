@@ -1,4 +1,5 @@
 """Launcher entrypoint for python -m src.web."""
+
 import importlib.util
 import os
 import socket
@@ -24,7 +25,6 @@ if (
     os.execv(str(venv_python), [str(venv_python), "-m", "src.web", *sys.argv[1:]])
 
 
-
 def find_available_port(start_port: int = 8000, max_attempts: int = 50, host: str = "127.0.0.1") -> int:
     """Probe for the first available port starting from start_port."""
     for offset in range(max_attempts):
@@ -40,12 +40,11 @@ def find_available_port(start_port: int = 8000, max_attempts: int = 50, host: st
 
 
 def main():
-    # Acquire single-instance lock per Telegram session
+    # Acquire single-instance lock per server daemon
     try:
-        from src.config import load_config
         from src.instance_lock import acquire_instance_lock
-        cfg = load_config()
-        acquire_instance_lock(cfg.session_path)
+
+        acquire_instance_lock(Path("session/televault_server.session"))
     except Exception as e:
         print(f"[TeleVault] Instance lock note: {e}")
 
@@ -63,6 +62,7 @@ def main():
 
     headless = bool(os.getenv("TELEVAULT_HEADLESS") or os.getenv("DISPLAY") is None)
     if not headless:
+
         def _open_browser():
             time.sleep(0.6)
             webbrowser.open(url)
@@ -80,6 +80,7 @@ def main():
         proxy_headers=True,
         forwarded_allow_ips=forwarded_ips,
     )
+
 
 if __name__ == "__main__":
     main()

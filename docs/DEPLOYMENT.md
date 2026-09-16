@@ -11,6 +11,7 @@ The primary and recommended deployment strategy uses **Docker & Docker Compose**
 - **Application Stack**: Containerized FastAPI + Uvicorn server running Python 3.12 (`Dockerfile`, `docker-compose.yml`).
 - **Container Host Port Mapping**: `127.0.0.1:8200:8000` (Internal container port `8000` exposed strictly to host loopback `127.0.0.1:8200`).
 - **Reverse Proxy**: Nginx at `/etc/nginx/conf.d/televault.conf` terminating TLS (HTTPS) on port 443 and proxying upstream to `http://127.0.0.1:8200`.
+- **Multi-Tenant Public Landing**: Public reverse proxies (Nginx/Cloudflare) forward requests directly to the web dashboard without needing hardcoded master tokens for end users. Visitors are assigned an isolated 256-bit session cookie (`televault_session`), path-jailed `.session` storage, and per-tenant download directories (`out/sessions/<session_id>`).
 - **Streaming Pipeline**: Unbuffered proxy streaming (`proxy_buffering off;`) on `/api/direct/` and `/api/media/stream/` for zero-disk direct Telegram MTProto browser downloads and streaming ZIP archives.
 - **Real-Time Telemetry**: WebSocket proxy upgrade on `/ws/` for live HUD metrics and log replay.
 - **CI/CD Automation**: GitHub Actions pipeline (`.github/workflows/deploy.yml`) running code hardening gates (Ruff, MyPy, Pytest) and SSH production deployment with automated health check polling and zero-downtime rollback.
@@ -46,15 +47,30 @@ Pre-create the required persistent host directories with correct ownership and r
 
 ```bash
 # Pre-create stateful directories matching container mounts
-mkdir -p session data out
+mkdir -p session data out out/sessions
 chown -R 1000:1000 session data out
 chmod 700 session data out
 ```
 
+Multi-Tenant Directory Layout:
+```text
+/opt/televault/
+├── session/                      # chmod 700 - Multi-tenant Telegram MTProto sessions
+│   ├── .televault_server.pid    # Web daemon PID lock (decoupled from CLI executions)
+│   ├── <session_id>.session     # Isolated visitor MTProto SQLite sessions
+│   └── <session_id>.session-wal # SQLite WAL journal
+├── data/                         # chmod 700 - Application state & persistent tokens
+│   └── .token                   # chmod 600 - Master admin token
+└── out/                          # chmod 700 - Media storage and manifests
+    ├── manifest.db               # SQLite manifest audit log (WAL mode)
+    └── sessions/                 # Per-tenant sandboxed download directories
+        └── <session_id>/         # Isolated visitor downloaded media & archives
+```
+
 Persistent Volume Mounts:
-- `./session:/app/session`: MTProto `.session` file and single-instance lockfiles.
+- `./session:/app/session`: Preserves individual visitor `.session` SQLite databases, WAL journals, and daemon locks across container restarts.
 - `./data:/app/data`: Local application state, caches, auxiliary databases, and the persisted master access token (`/app/data/.token`, `chmod 600`).
-- `./out:/app/out`: Downloaded files and SQLite audit log (`manifest.db`).
+- `./out:/app/out`: Holds root downloads, per-tenant isolated media archives (`out/sessions/<session_id>/`), and the SQLite audit log (`manifest.db`).
 
 ### Step 2.2: Configure Environment Variables (`.env`)
 Create the production `.env` file in `/opt/televault/.env`:
@@ -91,19 +107,21 @@ EOF
 chmod 600 /opt/televault/.env
 ```
 
-### Step 2.3: Master Token Persistence & `docker-compose.yml` Configuration
+### Step 2.3: Multi-Tenant Public Access, Master Token Persistence & `docker-compose.yml` Configuration
 
-TeleVault provides dual authentication modes for containerized deployments:
+TeleVault provides multi-tenant public access alongside administrative master-token authentication:
 
-1. **Automatic File-Based Token Persistence (`./data:/app/data`)**:
-   - In `docker-compose.yml`, the stateful host directory `./data` is mounted to `/app/data`.
-   - On first startup (when `TELEVAULT_TOKEN` is unset or empty), TeleVault automatically generates a cryptographically secure 32-byte master token (`secrets.token_urlsafe(32)`), writes it atomically to `/app/data/.token` with restrictive permissions (`chmod 600`), and logs it to stdout (`docker compose logs televault`).
-   - Because `./data:/app/data` is mounted as a persistent host volume, `/app/data/.token` is preserved across container rebuilds, restarts, and image updates. On subsequent launches, TeleVault reads and reuses the existing token instead of generating a new one.
-   - Users accessing the dashboard without `?token=...` can click the "Token: Missing" header pill (`#tokenPill`) or use the on-screen Access Token Modal (`#tokenModal`) to authenticate without altering URL parameters. The token is saved in browser `localStorage` and sent with subsequent requests.
+1. **Public Visitor Landing & Session Isolation**:
+   - Public visitors connecting through reverse proxies (Nginx or Cloudflare at `https://televault.madhudadi.in`) land directly on the dashboard without needing pre-shared master tokens or passwords.
+   - TeleVault automatically issues an isolated 256-bit `televault_session` cookie (`HttpOnly; SameSite=Lax; Path=/`).
+   - Each visitor authenticates their own Telegram account via Phone SMS or QR code. Telethon sessions are persisted to `/app/session/<session_id>.session` and downloads are quarantined to `/app/out/sessions/<session_id>/`.
+   - The in-memory `SessionManager` bounds concurrency to 25 active clients and automatically disconnects idle sessions after 15 minutes, preserving active download tasks.
 
-2. **Static Environment Override (`TELEVAULT_TOKEN`)**:
-   - `docker-compose.yml` configures `TELEVAULT_TOKEN=${TELEVAULT_TOKEN:-}` under `environment:`.
-   - Defining `TELEVAULT_TOKEN=your_secure_random_token_here` in `.env` overrides the persisted file in `/app/data/.token`, enforcing a fixed master token across the deployment.
+2. **Administrative Master-Token Precedence (`./data:/app/data` & `TELEVAULT_TOKEN`)**:
+   - Master token authentication (`X-Auth-Token` header or `?token=` parameter) retains strict precedence over visitor sessions. When a master token is supplied:
+     - API requests operate against the root session (`TG_SESSION`) and root output directory (`TELEVAULT_OUT_DIR`).
+     - Status monitoring (`/api/status`), administrative operations, and automated CI pipelines (`.github/workflows/deploy.yml`) continue executing without visitor interference.
+   - On first startup (when `TELEVAULT_TOKEN` is unset or empty), TeleVault generates a master token to `/app/data/.token` (`chmod 600`) or respects the `TELEVAULT_TOKEN` environment override.
 
 ### Step 2.4: Launch Container Stack
 Start the TeleVault stack using Docker Compose:

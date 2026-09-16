@@ -136,10 +136,27 @@ const _originalFetch = window.fetch;
 window.fetch = async function(...args) {
   const res = await _originalFetch.apply(this, args);
   if (res.status === 401) {
-    token = '';
-    sessionStorage.removeItem('tele_vault_token');
-    updateTokenPill();
-    openTokenModal(true, 'Session token invalid or expired. Please re-enter master access token.');
+    try {
+      const clone = res.clone();
+      const data = await clone.json();
+      if (data.detail === 'Telegram authentication required') {
+        // Visitor needs to log in to Telegram via authCard
+        const authCard = document.getElementById('authCard');
+        if (authCard) authCard.style.display = 'block';
+        const userPill = document.getElementById('userPill');
+        if (userPill) userPill.innerText = 'Unauthenticated';
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        return res;
+      }
+    } catch (e) {}
+
+    if (token) {
+      token = '';
+      sessionStorage.removeItem('tele_vault_token');
+      updateTokenPill();
+      openTokenModal(true, 'Session token invalid or expired. Please re-enter master access token.');
+    }
   }
   return res;
 };
@@ -227,15 +244,11 @@ function connectWebSocket() {
   const dot = document.getElementById('wsDot');
   const text = document.getElementById('wsText');
 
-  if (!token) {
-    if (dot) dot.className = 'live-dot disconnected';
-    if (text) text.innerText = 'No Token';
-    return;
-  }
-
   const loc = window.location;
   const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${proto}//${loc.host}/ws/live?token=${encodeURIComponent(token)}`;
+  const wsUrl = token
+    ? `${proto}//${loc.host}/ws/live?token=${encodeURIComponent(token)}`
+    : `${proto}//${loc.host}/ws/live`;
 
   ws = new WebSocket(wsUrl);
 
@@ -247,12 +260,14 @@ function connectWebSocket() {
   ws.onclose = (event) => {
     if (dot) dot.className = 'live-dot disconnected';
     if (event && (event.code === 1008 || event.code === 4403 || event.code === 1003)) {
-      sessionStorage.removeItem('tele_vault_token');
-      token = '';
-      updateTokenPill();
-      if (text) text.innerText = 'Session Expired';
-      openTokenModal(true, 'Authentication failed or session expired. Please re-enter master access token.');
-      return;
+      if (token) {
+        sessionStorage.removeItem('tele_vault_token');
+        token = '';
+        updateTokenPill();
+        if (text) text.innerText = 'Session Expired';
+        openTokenModal(true, 'Authentication failed or session expired. Please re-enter master access token.');
+        return;
+      }
     }
     if (text) text.innerText = 'Reconnecting...';
     setTimeout(connectWebSocket, 3000);
@@ -270,22 +285,33 @@ function connectWebSocket() {
 
 function handleWsEvent(data) {
   if (data.type === 'SESSION_EXPIRED' || data.type === 'ORIGIN_FORBIDDEN') {
-    sessionStorage.removeItem('tele_vault_token');
-    token = '';
-    updateTokenPill();
-    const dot = document.getElementById('wsDot');
-    const text = document.getElementById('wsText');
-    if (dot) dot.className = 'live-dot disconnected';
-    if (text) text.innerText = 'Session Expired';
-    const msg = data.type === 'ORIGIN_FORBIDDEN'
-      ? 'WebSocket connection rejected: Origin not allowed.'
-      : 'Session token invalid or expired. Please re-enter master access token.';
-    showToast(msg, 'error', 'Session Expired', 10000);
-    if (ws) {
-      ws.onclose = null;
-      try { ws.close(1000); } catch (e) {}
+    if (token) {
+      sessionStorage.removeItem('tele_vault_token');
+      token = '';
+      updateTokenPill();
+      const dot = document.getElementById('wsDot');
+      const text = document.getElementById('wsText');
+      if (dot) dot.className = 'live-dot disconnected';
+      if (text) text.innerText = 'Session Expired';
+      const msg = data.type === 'ORIGIN_FORBIDDEN'
+        ? 'WebSocket connection rejected: Origin not allowed.'
+        : 'Session token invalid or expired. Please re-enter master access token.';
+      showToast(msg, 'error', 'Session Expired', 10000);
+      if (ws) {
+        ws.onclose = null;
+        try { ws.close(1000); } catch (e) {}
+      }
+      openTokenModal(true, msg);
+    } else {
+      const dot = document.getElementById('wsDot');
+      const text = document.getElementById('wsText');
+      if (dot) dot.className = 'live-dot disconnected';
+      if (text) text.innerText = 'Offline';
+      if (ws) {
+        ws.onclose = null;
+        try { ws.close(1000); } catch (e) {}
+      }
     }
-    openTokenModal(true, msg);
     return;
   }
   if (data.type === 'INIT_STATE') {
@@ -402,16 +428,68 @@ async function checkAuth() {
   try {
     const res = await fetch('/api/auth/me', { headers: getHeaders() });
     const data = await res.json();
+    const userPill = document.getElementById('userPill');
+    const authCard = document.getElementById('authCard');
+    const logoutBtn = document.getElementById('logoutBtn');
+
     if (data.authorized && data.user) {
-      document.getElementById('userPill').innerText = `${data.user.name || 'User'} (${data.user.phone || 'Masked'})`;
-      document.getElementById('authCard').style.display = 'none';
+      const userLabel = `${data.user.name || 'User'} (${data.user.phone || 'Masked'})`;
+      if (userPill) {
+        userPill.innerText = userLabel;
+        userPill.title = `Telegram Account: ${userLabel}`;
+      }
+      if (authCard) authCard.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connectWebSocket();
+      }
       loadDialogs('all');
     } else {
-      document.getElementById('userPill').innerText = 'Unauthenticated';
-      document.getElementById('authCard').style.display = 'block';
+      if (userPill) {
+        userPill.innerText = 'Unauthenticated';
+        userPill.title = 'Telegram session status: Unauthenticated';
+      }
+      const list = document.getElementById('dialogList');
+      if (list && (!currentDialogs || currentDialogs.length === 0)) {
+        list.innerHTML = `
+          <div style="padding:2rem 1rem; text-align:center;">
+            <div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:0.5rem;">Please log in to your Telegram account above to view your chats.</div>
+          </div>
+        `;
+      }
+      if (authCard) authCard.style.display = 'block';
+      if (logoutBtn) logoutBtn.style.display = 'none';
     }
   } catch (e) {
     console.error('Auth Check Error:', e);
+  }
+}
+
+async function logoutTelegram() {
+  if (!confirm('Are you sure you want to log out of Telegram?')) return;
+  try {
+    const res = await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+    if (data.status === 'ok' || data.status === 'logged_out') {
+      showToast('Logged out of Telegram successfully', 'success', 'Logged Out');
+      stopQrPolling();
+      const userPill = document.getElementById('userPill');
+      if (userPill) userPill.innerText = 'Unauthenticated';
+      const authCard = document.getElementById('authCard');
+      if (authCard) authCard.style.display = 'block';
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      currentDialogs = [];
+      renderDialogs([]);
+    } else {
+      showToast(data.detail || 'Logout failed', 'error');
+    }
+  } catch (e) {
+    console.error('Logout error:', e);
+    showToast('Failed to log out of Telegram', 'error');
   }
 }
 
@@ -644,8 +722,8 @@ async function loadDialogs(kind = 'all') {
     const res = await fetch('/api/dialogs?kind=' + encodeURIComponent(kind), { headers: getHeaders() });
     if (res.status === 401) {
       list.innerHTML = `
-        <div style="padding:1.5rem 1rem; text-align:center;">
-          <div style="color:var(--accent-crimson); font-size:0.85rem; margin-bottom:0.5rem;">Session expired. Please click the fresh link printed in your terminal.</div>
+        <div style="padding:2rem 1rem; text-align:center;">
+          <div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:0.5rem;">Please log in to your Telegram account above to view your chats.</div>
         </div>
       `;
       return;
@@ -1059,7 +1137,9 @@ function copyToClipboard(text) {
 async function updateStorage() {
   try {
     const res = await fetch('/api/system/storage', { headers: getHeaders() });
+    if (!res.ok) return;
     const data = await res.json();
+    if (typeof data.free_bytes !== 'number' || typeof data.total_bytes !== 'number') return;
     const freeGb = (data.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const totalGb = (data.total_bytes / (1024 * 1024 * 1024)).toFixed(1);
     const usedGb = (data.used_bytes / (1024 * 1024 * 1024)).toFixed(1);
@@ -1636,10 +1716,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.onload = () => {
   updateTokenPill();
-  if (!token) {
-    openTokenModal(true);
-    return; // Suppress initial 401 storm
-  }
   connectWebSocket();
   checkAuth();
   updateStorage();

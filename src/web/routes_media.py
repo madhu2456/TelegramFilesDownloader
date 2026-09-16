@@ -1,4 +1,5 @@
 """Media gallery pagination, byte-range HTTP 206 streaming, and disk monitor."""
+
 import os
 import sqlite3
 from pathlib import Path
@@ -8,13 +9,16 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from src.store import _ensure_meta
+from src.web.client_helpers import get_session_out_dir
 
 router = APIRouter()
 
 
 def _connect_manifest(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA busy_timeout=5000;")
+    conn.execute("PRAGMA busy_timeout=10000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -72,7 +76,7 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, i
 
 @router.get("/api/media")
 async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str | None = None):
-    out_dir = Path(getattr(request.app.state, "out_dir", "out")).resolve()
+    out_dir = get_session_out_dir(request).resolve()
     db_path = out_dir / "manifest.db"
     limit = min(max(1, limit), 100)
     page = max(1, page)
@@ -124,20 +128,22 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
             k = classify_mime(r["mime"], relpath)
             target = (out_dir / relpath).resolve()
             exists = target.is_relative_to(out_dir) and target.exists()
-            items.append({
-                "chat_id": r["chat_id"],
-                "msg_id": r["msg_id"],
-                "sha256": r["sha256"],
-                "size": r["size"],
-                "filename": filename,
-                "relpath": relpath,
-                "date_utc": r["date_utc"],
-                "mime": r["mime"],
-                "snippet": r["snippet"],
-                "kind": k,
-                "exists": exists,
-                "stream_url": f"/api/media/stream/{r['chat_id']}/{r['msg_id']}",
-            })
+            items.append(
+                {
+                    "chat_id": r["chat_id"],
+                    "msg_id": r["msg_id"],
+                    "sha256": r["sha256"],
+                    "size": r["size"],
+                    "filename": filename,
+                    "relpath": relpath,
+                    "date_utc": r["date_utc"],
+                    "mime": r["mime"],
+                    "snippet": r["snippet"],
+                    "kind": k,
+                    "exists": exists,
+                    "stream_url": f"/api/media/stream/{r['chat_id']}/{r['msg_id']}",
+                }
+            )
         pages = (total + limit - 1) // limit if total > 0 else 1
         return {
             "items": items,
@@ -154,7 +160,7 @@ async def get_media(request: Request, page: int = 1, limit: int = 50, kind: str 
 
 @router.get("/api/media/stream/{chat_id}/{msg_id}")
 async def stream_media(request: Request, chat_id: int, msg_id: int):
-    out_dir = Path(getattr(request.app.state, "out_dir", "out")).resolve()
+    out_dir = get_session_out_dir(request).resolve()
     db_path = out_dir / "manifest.db"
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Manifest database not found")
@@ -163,10 +169,14 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
     try:
         have_cols = {r[1] for r in conn.execute("PRAGMA table_info(downloads)").fetchall()}
         mime_expr = "mime" if "mime" in have_cols else "NULL AS mime"
-        row = conn.cursor().execute(
-            f"SELECT relpath, {mime_expr} FROM downloads WHERE chat_id = ? AND msg_id = ?",
-            (chat_id, msg_id),
-        ).fetchone()
+        row = (
+            conn.cursor()
+            .execute(
+                f"SELECT relpath, {mime_expr} FROM downloads WHERE chat_id = ? AND msg_id = ?",
+                (chat_id, msg_id),
+            )
+            .fetchone()
+        )
     finally:
         conn.close()
 
@@ -185,13 +195,16 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
 
     disposition_type = "attachment" if request.query_params.get("download") == "1" else "inline"
     filename = Path(row["relpath"]).name
-    ascii_filename = filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip() or "file"
+    ascii_filename = (
+        filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip()
+        or "file"
+    )
     encoded_filename = quote(filename, safe="")
 
     common_headers = {
         "Accept-Ranges": "bytes",
         "Content-Type": row["mime"] or "application/octet-stream",
-        "Content-Disposition": f'{disposition_type}; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        "Content-Disposition": f"{disposition_type}; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "sandbox; default-src 'none'; media-src 'self'; img-src 'self'",
     }
@@ -201,6 +214,7 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
         return StreamingResponse(iter([]), status_code=200, headers=common_headers)
 
     if not range_header or parsed_range is None:
+
         def iter_full():
             with open(target_file, "rb") as f:
                 while chunk := f.read(1024 * 1024):
@@ -230,7 +244,7 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
 
 @router.get("/api/system/storage")
 async def get_storage(request: Request):
-    out_dir = Path(getattr(request.app.state, "out_dir", "out")).resolve()
+    out_dir = get_session_out_dir(request).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     vfs = os.statvfs(str(out_dir))
     total_bytes = vfs.f_frsize * vfs.f_blocks

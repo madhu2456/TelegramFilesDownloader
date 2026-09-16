@@ -135,6 +135,25 @@ header {
   background: rgba(245, 158, 11, 0.12);
 }
 
+#logoutBtn {
+  cursor: pointer;
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #F87171;
+  background: rgba(239, 68, 68, 0.08);
+  font-weight: 500;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  border-radius: 20px;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s ease;
+}
+#logoutBtn:hover {
+  border-color: var(--accent-crimson, #EF4444);
+  background: rgba(239, 68, 68, 0.16);
+  color: #fff;
+}
+
 .input-has-eye {
   padding-right: 3.2rem !important;
 }
@@ -213,6 +232,12 @@ header {
 @media (max-width: 640px) {
   header {
     padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .header-status {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   #storagePill {
     display: none;

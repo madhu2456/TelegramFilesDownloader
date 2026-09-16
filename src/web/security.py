@@ -1,12 +1,16 @@
 """Ephemeral token generation, verification, origin validation, rate limiting, and PII masking."""
+
 import hashlib
 import hmac
 import logging
 import os
 import secrets
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse
+
+from starlette.requests import Request
 
 logger = logging.getLogger("televault.security")
 
@@ -104,6 +108,7 @@ def verify_token(token: str | None) -> bool:
     except Exception:
         return False
 
+
 def verify_origin(origin: str | None, port: int) -> bool:
     """Verify that Origin header matches 127.0.0.1, localhost, [::1], televault.madhudadi.in,
     or TELEVAULT_ALLOWED_HOSTS.
@@ -118,11 +123,7 @@ def verify_origin(origin: str | None, port: int) -> bool:
             return False
         h_lower = host.lower()
         loopback_hosts = {"127.0.0.1", "localhost", "::1", "[::1]"}
-        custom_hosts = {
-            h.strip().lower()
-            for h in os.getenv("TELEVAULT_ALLOWED_HOSTS", "").split(",")
-            if h.strip()
-        }
+        custom_hosts = {h.strip().lower() for h in os.getenv("TELEVAULT_ALLOWED_HOSTS", "").split(",") if h.strip()}
         allowed_domains = {"televault.madhudadi.in"}.union(custom_hosts)
         p = parsed.port or (80 if parsed.scheme == "http" else 443)
 
@@ -134,6 +135,7 @@ def verify_origin(origin: str | None, port: int) -> bool:
         return False
     except Exception:
         return False
+
 
 def mask_phone(phone: str | None) -> str:
     """Mask phone number to protect PII, e.g. +15551234567 -> +1***4567."""
@@ -161,11 +163,7 @@ class AuthFailureTracker:
 
     def _prune(self, now: float) -> None:
         cutoff = now - self.window_seconds
-        expired = [
-            ip
-            for ip, times in self._failures.items()
-            if not times or times[-1] <= cutoff
-        ]
+        expired = [ip for ip, times in self._failures.items() if not times or times[-1] <= cutoff]
         for ip in expired:
             self._failures.pop(ip, None)
 
@@ -209,11 +207,80 @@ class AuthFailureTracker:
             self._failures.clear()
 
 
-_AUTH_RATE_LIMITER = AuthFailureTracker(
-    max_failures=10, window_seconds=60.0, max_entries=5000
-)
+_AUTH_RATE_LIMITER = AuthFailureTracker(max_failures=10, window_seconds=60.0, max_entries=5000)
 
 
 def get_auth_rate_limiter() -> AuthFailureTracker:
     """Retrieve the global authentication rate limiter instance."""
     return _AUTH_RATE_LIMITER
+
+
+class AuthRateLimiter:
+    """Decoupled in-memory rate limiter with per-IP and global quotas."""
+
+    def __init__(self, max_global: int, max_per_ip: int, window_seconds: float = 60.0):
+        self.max_global = max_global
+        self.max_per_ip = max_per_ip
+        self.window_seconds = window_seconds
+        self._global_attempts: list[float] = []
+        self._ip_attempts: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def _prune(self, now: float) -> None:
+        cutoff = now - self.window_seconds
+        self._global_attempts = [t for t in self._global_attempts if t > cutoff]
+        expired_ips = [ip for ip, times in self._ip_attempts.items() if not times or times[-1] <= cutoff]
+        for ip in expired_ips:
+            self._ip_attempts.pop(ip, None)
+
+    def check_rate_limit(self, client_ip: str) -> tuple[bool, int]:
+        now = time.time()
+        with self._lock:
+            self._prune(now)
+            cutoff = now - self.window_seconds
+            ip_times = [t for t in self._ip_attempts.get(client_ip, []) if t > cutoff]
+            if len(self._global_attempts) >= self.max_global:
+                oldest = self._global_attempts[0] if self._global_attempts else now
+                return True, max(1, int((oldest + self.window_seconds) - now))
+            if len(ip_times) >= self.max_per_ip:
+                oldest = ip_times[0] if ip_times else now
+                return True, max(1, int((oldest + self.window_seconds) - now))
+            return False, 0
+
+    def record_attempt(self, client_ip: str) -> None:
+        now = time.time()
+        with self._lock:
+            self._prune(now)
+            cutoff = now - self.window_seconds
+            self._global_attempts.append(now)
+            ip_times = [t for t in self._ip_attempts.get(client_ip, []) if t > cutoff]
+            ip_times.append(now)
+            self._ip_attempts[client_ip] = ip_times
+
+
+_PHONE_AUTH_LIMITER = AuthRateLimiter(max_global=5, max_per_ip=2, window_seconds=60.0)
+_QR_AUTH_LIMITER = AuthRateLimiter(max_global=20, max_per_ip=10, window_seconds=60.0)
+
+
+def get_phone_auth_limiter() -> AuthRateLimiter:
+    return _PHONE_AUTH_LIMITER
+
+
+def get_qr_auth_limiter() -> AuthRateLimiter:
+    return _QR_AUTH_LIMITER
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP from reverse proxy headers or socket address."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first_ip = xff.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+    x_real = request.headers.get("x-real-ip")
+    if x_real and x_real.strip():
+        return x_real.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+

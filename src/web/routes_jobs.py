@@ -1,6 +1,6 @@
 """API routes for job control, state snapshot, and WebSocket streaming."""
+
 import asyncio
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -9,11 +9,18 @@ from pydantic import BaseModel
 from src.downloader import DownloadOpts
 from src.resolver import resolve_target
 from src.store import init_db
-from src.web.client_helpers import _ensure_connected
-from src.web.job_manager import JobConflictError, JobManager
+from src.web.client_helpers import (
+    _ensure_connected,
+    get_session_client,
+    get_session_job_manager,
+    get_session_out_dir,
+)
+from src.web.job_manager import JobConflictError
 from src.web.security import verify_origin, verify_token
+from src.web.session_security import SESSION_COOKIE_NAME
 
 router = APIRouter()
+
 
 class DownloadStartRequest(BaseModel):
     target: str
@@ -33,14 +40,17 @@ class DownloadStartRequest(BaseModel):
     sync: bool = False
     join: bool = False
 
+
 @router.post("/api/download/start")
 async def start_download(req: DownloadStartRequest, request: Request):
-    jm: JobManager = request.app.state.job_manager
+    jm = get_session_job_manager(request)
+    if not jm:
+        raise HTTPException(status_code=500, detail="Job manager not initialized")
     if jm.is_running():
         jm.add_log(f"Auto-terminating active job {jm._active_job_id} for new request.")
         await jm.cancel_job_async(timeout=5.0)
 
-    client = getattr(request.app.state, "tg_client", None)
+    client = await get_session_client(request, allow_jit=False)
     if not client:
         raise HTTPException(status_code=500, detail="Telegram client not initialized")
 
@@ -51,7 +61,7 @@ async def start_download(req: DownloadStartRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Target resolution failed: {e}")
 
-    out_dir = Path(getattr(request.app.state, "out_dir", "out"))
+    out_dir = get_session_out_dir(request)
     out_dir.mkdir(parents=True, exist_ok=True)
     db = init_db(out_dir / "manifest.db")
 
@@ -83,7 +93,7 @@ async def start_download(req: DownloadStartRequest, request: Request):
             pass
         return JSONResponse(
             status_code=409,
-            content={"error": "CONFLICT", "detail": "A download job is already running", "job_id": jm._active_job_id}
+            content={"error": "CONFLICT", "detail": "A download job is already running", "job_id": jm._active_job_id},
         )
     except Exception:
         try:
@@ -92,27 +102,43 @@ async def start_download(req: DownloadStartRequest, request: Request):
             pass
         raise
 
+
 @router.post("/api/download/cancel")
 async def cancel_download(request: Request):
-    jm: JobManager = request.app.state.job_manager
-    cancelled = jm.cancel_job()
+    jm = get_session_job_manager(request)
+    cancelled = jm.cancel_job() if jm else False
     return {"status": "cancelling" if cancelled else "no_active_job"}
+
 
 @router.get("/api/download/state")
 async def get_download_state(request: Request):
-    jm: JobManager = request.app.state.job_manager
+    jm = get_session_job_manager(request)
+    if not jm:
+        return {"snapshot": {}, "logs": []}
     return {"snapshot": jm.get_snapshot(), "logs": jm.get_recent_logs()}
+
 
 @router.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
     token = websocket.query_params.get("token") or websocket.headers.get("x-auth-token")
-    if not verify_token(token):
+    session_id = websocket.cookies.get(SESSION_COOKIE_NAME)
+    is_authed = False
+    jm = None
+
+    if token and verify_token(token):
+        is_authed = True
+        jm = getattr(websocket.app.state, "job_manager", None)
+    elif session_id:
+        sm = getattr(websocket.app.state, "session_manager", None)
+        if sm and session_id in sm._sessions:
+            tenant = sm._sessions[session_id]
+            is_authed = True
+            jm = tenant.job_manager
+
+    if not is_authed or jm is None:
         try:
             await websocket.accept()
-            await websocket.send_json({
-                "type": "SESSION_EXPIRED",
-                "detail": "Session token invalid or expired"
-            })
+            await websocket.send_json({"type": "SESSION_EXPIRED", "detail": "Session token invalid or expired"})
             await websocket.close(code=1008, reason="Policy Violation: Invalid token")
         except Exception:
             pass
@@ -123,24 +149,16 @@ async def websocket_live(websocket: WebSocket):
     if not verify_origin(origin, port):
         try:
             await websocket.accept()
-            await websocket.send_json({
-                "type": "ORIGIN_FORBIDDEN",
-                "detail": "Origin not allowed"
-            })
+            await websocket.send_json({"type": "ORIGIN_FORBIDDEN", "detail": "Origin not allowed"})
             await websocket.close(code=1008, reason="Policy Violation: Invalid origin")
         except Exception:
             pass
         return
 
     await websocket.accept()
-    jm: JobManager = websocket.app.state.job_manager
     q = jm.subscribe()
     try:
-        await websocket.send_json({
-            "type": "INIT_STATE",
-            "state": jm.get_snapshot(),
-            "logs": jm.get_recent_logs()
-        })
+        await websocket.send_json({"type": "INIT_STATE", "state": jm.get_snapshot(), "logs": jm.get_recent_logs()})
         while True:
             event = await q.get()
             await websocket.send_json(event)
@@ -148,3 +166,4 @@ async def websocket_live(websocket: WebSocket):
         pass
     finally:
         jm.unsubscribe(q)
+

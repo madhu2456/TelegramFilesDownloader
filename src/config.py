@@ -1,4 +1,5 @@
 """Validated configuration loader with strict file permissions."""
+
 import os
 import re
 from dataclasses import dataclass
@@ -36,10 +37,11 @@ def scrub_for_log(data: dict) -> dict:
     return {k: ("[REDACTED]" if str(k).lower() in _REDACT else v) for k, v in data.items()}
 
 
-def validate_config(cfg: Config) -> None:
+def validate_config(cfg: Config, web_mode: bool = False) -> None:
     ok = type(cfg.api_id) is int and cfg.api_id > 0
     ok &= bool(re.fullmatch(r"[0-9a-fA-F]{32}", cfg.api_hash or ""))
-    ok &= bool(re.fullmatch(r"\+[1-9]\d{7,14}", cfg.phone or ""))
+    if not web_mode:
+        ok &= bool(re.fullmatch(r"\+[1-9]\d{7,14}", cfg.phone or ""))
     if not ok:
         raise InvalidConfigError(f"Invalid config {scrub_for_log(cfg.__dict__)}: {_HINT}")
 
@@ -52,18 +54,21 @@ def ensure_out_dir(p) -> Path:
     return d
 
 
-def load_config(dotenv_path=None) -> Config:
+def load_config(dotenv_path=None, web_mode: bool = False) -> Config:
     load_dotenv(dotenv_path) if dotenv_path else load_dotenv()
     try:
         api_id = int(str(os.getenv("TG_API_ID", "")).strip())
     except ValueError:
         raise InvalidConfigError(f"Invalid TG_API_ID: {_HINT}")
     session_target = os.getenv("TG_SESSION", "session/telegram.session") or "session/telegram.session"
+    phone = str(os.getenv("TG_PHONE", "")).strip()
+    if web_mode and not phone:
+        phone = ""
     cfg = Config(
         api_id,
         str(os.getenv("TG_API_HASH", "")).strip(),
-        str(os.getenv("TG_PHONE", "")).strip(),
+        phone,
         Path(session_target),
     )
-    validate_config(cfg)
+    validate_config(cfg, web_mode=web_mode)
     return cfg

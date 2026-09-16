@@ -40,6 +40,11 @@ See [docs/USAGE.md](docs/USAGE.md) for full flags, safety limits, web API refere
   - **Cross-Platform Compatibility**: Full PKWARE compliance with UTF-8 filename encoding (Bit 11 flag `0x0808`), Unix file attributes (`0o644`), automatic collision deduplication (`{name}_{msg_id}.ext`), and 32-bit local headers guaranteed to open cleanly in Windows Explorer, macOS Archive Utility, and Linux.
 
 ### Hardened Core & Security
+- **Multi-Tenant Architecture & Visitor Session Isolation**: Public visitors to `https://televault.madhudadi.in/` land directly on the dashboard without requiring an administrative master access token. Each visitor is assigned an isolated 256-bit `televault_session` cookie (`HttpOnly; SameSite=Lax; Path=/`), a sandboxed download directory (`out/sessions/<session_id>`), and an isolated Telethon session (`session/<session_id>.session`) strictly path-jailed against directory traversal.
+- **Bounded LRU Pool & Idle TTL Sweeper**: `SessionManager` manages a bounded pool of up to 25 concurrent active Telethon clients with automatic 15-minute idle TTL background reaping (preserving active downloads) and HTTP 503 capacity defense.
+- **Telegram Account Lifecycle & In-Browser Logout**: Public visitors log in via Phone SMS or QR code directly in the browser. Authenticated sessions show user profile in the header with an accessible `Log Out` button (`POST /api/auth/logout`) that cleanly terminates the Telethon session, unlinks `.session` storage, and resets client state.
+- **Concurrency & SQLite WAL Hardening**: Decoupled web server daemon lock (`session/.televault_server.pid`) permits simultaneous CLI executions. SQLite manifest and Telethon session databases operate in WAL mode (`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=10000; PRAGMA synchronous=NORMAL;`).
+- **Master-Token Precedence**: Administrative master token authentication (`X-Auth-Token` or `?token=`) retains precedence for headless administration, status monitoring (`/api/status`), and automated CI pipelines.
 - **Single-Instance Process Locking**: Session-scoped lockfile engine (`.{stem}.pid`) with `os.O_CLOEXEC`, non-blocking flock deadline loop (4.0s timeout), and phantom inode validation (`st_dev` and `st_ino` verification on both acquisition and unlinking to protect against stale descriptor unlinking). Features PID recycling checks via `/proc/{pid}/cmdline` and `ps`, zombie detection (`State: Z`), and clean SIGTERM-to-SIGKILL termination of obsolete instances.
 - **Persistent Master Token & In-Browser Authentication**: Automatic token persistence to `data/.token` (`chmod 600`) or environment override (`TELEVAULT_TOKEN`), timing-safe constant-time SHA-256 pre-hashed verification, and an in-browser Access Token Modal (`#tokenModal`) accessible via the header status pill (`#tokenPill`) to enter/update master tokens without modifying URL parameters.
 - **Sliding-Window Auth Rate Limiting**: Max 10 failed auth attempts per 60s per client IP (returning HTTP 429 with `Retry-After`), reverse proxy `X-Forwarded-For` client IP tracking, and unconditional bypass for Docker health probes (`/api/health`).
@@ -140,12 +145,16 @@ src/
   store.py          # SQLite manifest + jsonl log + sync checkpoints
   web/              # TeleVault web dashboard
     app.py          # FastAPI application & lifespan
+    client_helpers.py # Master-token precedence & tenant client resolution
     job_manager.py  # Decoupled download job runner & state machine
     qr.py           # Pure-Python in-memory SVG QR code engine
+    routes_direct.py # Browser file extraction & streaming ZIP engine
     routes_jobs.py  # Download job control & WebSocket /ws/live endpoint
     routes_media.py # RFC 7233 byte-range streaming, gallery pagination, storage
-    routes_tg.py    # Telegram auth wizard & dialogs explorer
-    security.py     # Ephemeral session token & origin validation
+    routes_tg.py    # Telegram auth wizard, dialogs explorer, logout
+    security.py     # Master token validation, sliding rate limiting, Origin checks
+    session_manager.py # Bounded LRU pool, client lifecycle, idle TTL sweeper
+    session_security.py # Session ID validation, canonical path jailing, cookie helpers
     static/         # Obsidian Glassmorphism UI (HTML5, CSS3, ES6)
 docs/
   USAGE.md          # full CLI reference
@@ -154,6 +163,7 @@ tests/              # Comprehensive test suite
 
 ## Version history
 
+- **Multi-Tenant Session Isolation & Public Dashboard Landing**: Public visitors land directly on the dashboard without requiring an administrative master access token. Dynamic 256-bit visitor session cookies (`televault_session`), path-jailed tenant sessions (`session/<session_id>.session`) and download directories (`out/sessions/<session_id>`); bounded LRU client pool (`SessionManager`, max 25 active clients) with 15-minute idle TTL sweeper and HTTP 503 capacity protection; in-browser account lifecycle with interactive logout (`POST /api/auth/logout`) and unlinking; decoupled server daemon lock (`session/.televault_server.pid`) allowing simultaneous CLI runs; SQLite manifest and session WAL hardening (`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=10000; PRAGMA synchronous=NORMAL;`).
 - **TeleVault UI/UX Modernization & Security Hardening**: Pure-Python in-memory SVG QR engine (zero HTTP exfiltration); WCAG 2.2 AA Obsidian Dark Glassmorphism design system (>= 4.5:1 contrast, focus rings, 44x44px targets, focus traps, Enter/Space card triggers); real-time WebSocket telemetry HUD with animated SVG speedometer arc gauge, live transfer rate (MB/s), multi-hour ETA calculation, active file indicator with full path tooltip, and circular 500-line auto-scrolling terminal logs with reconnect replay; paginated media gallery with SQLite SQL-pushdown kind filtering and responsive Theater Lightbox; single-instance process locking with `O_CLOEXEC`, flock deadline, and phantom inode validation; RFC 7233 byte-range streaming with Content-Security-Policy sandbox and `X-Content-Type-Options: nosniff`; robust resolver with 4-char Fragment handles, invite link `access_hash` preservation, and positive channel ID fallback.
 - **Uncapped Downloads & No Limit Mode**: Removed 500-message ceiling across CLI and Web UI. Added `--no-limit` (and `--limit 0`) CLI flags for full chat history archiving, interactive "No Limit (All)" toggle switch in Web UI, and indeterminate streaming progress shimmer animation.
 - `v0.3.1` (hardening): Support 4-character Fragment handles (`@news`, `t.me/auto`); exit code 3 on `PeerFloodError` and `FloodWaitError` > 300s; monotonic sync checkpointing (only advances on verified downloads/skips); automatic `.part` cleanup on aliases and same-size skips; directory fsync on replace.

@@ -1,4 +1,5 @@
 """Direct browser extraction and streaming routes without server disk writes."""
+
 import asyncio
 from collections.abc import AsyncGenerator
 from urllib.parse import quote
@@ -9,7 +10,11 @@ from pydantic import BaseModel
 from telethon import utils
 
 from src.resolver import resolve_target
-from src.web.client_helpers import _ensure_connected, _resolve_peer_robust
+from src.web.client_helpers import (
+    _ensure_connected,
+    _resolve_peer_robust,
+    get_session_client,
+)
 from src.web.routes_media import classify_mime
 from src.web.zip_stream import (
     StreamingZipBuilder,
@@ -33,9 +38,9 @@ class ChatScanRequest(BaseModel):
 @router.post("/api/chat/scan")
 async def scan_chat_media(req: ChatScanRequest, request: Request):
     """Scan messages in target entity and extract media metadata without server disk writes."""
-    client = getattr(request.app.state, "tg_client", None)
+    client = await get_session_client(request, allow_jit=False)
     if not client:
-        raise HTTPException(status_code=500, detail="Telegram client not initialized")
+        raise HTTPException(status_code=401, detail="Telegram client not initialized or session not authenticated")
 
     await _ensure_connected(client)
 
@@ -49,7 +54,12 @@ async def scan_chat_media(req: ChatScanRequest, request: Request):
         chat_id = utils.get_peer_id(ent)
     except Exception:
         chat_id = int(getattr(ent, "id", 0) or 0)
-    chat_title = getattr(ent, "title", None) or getattr(ent, "username", None) or getattr(ent, "first_name", None) or str(chat_id)
+    chat_title = (
+        getattr(ent, "title", None)
+        or getattr(ent, "username", None)
+        or getattr(ent, "first_name", None)
+        or str(chat_id)
+    )
 
     eff_limit = min(max(1, req.limit), 500)
     items: list[dict] = []
@@ -110,8 +120,8 @@ async def scan_chat_media(req: ChatScanRequest, request: Request):
         kind = classify_mime(mime, filename)
 
         if filter_val:
-            kind_match = (kind == filter_val)
-            type_match = (filter_val in med_type.lower())
+            kind_match = kind == filter_val
+            type_match = filter_val in med_type.lower()
             attr_match = bool(getattr(m, filter_val, None) or getattr(med, filter_val, None))
             if not (kind_match or type_match or attr_match):
                 continue
@@ -124,18 +134,20 @@ async def scan_chat_media(req: ChatScanRequest, request: Request):
         caption = getattr(m, "text", None) or getattr(m, "message", None) or ""
         caption = caption[:200] if isinstance(caption, str) and caption else ""
 
-        items.append({
-            "msg_id": mid,
-            "chat_id": chat_id,
-            "name": filename,
-            "size": size,
-            "mime": mime,
-            "kind": kind,
-            "date": date_utc,
-            "caption": caption,
-        })
+        items.append(
+            {
+                "msg_id": mid,
+                "chat_id": chat_id,
+                "name": filename,
+                "size": size,
+                "mime": mime,
+                "kind": kind,
+                "date": date_utc,
+                "caption": caption,
+            }
+        )
 
-    has_more = (total_scanned >= eff_limit)
+    has_more = total_scanned >= eff_limit
     next_offset_id = last_msg_id if has_more else None
 
     return {
@@ -151,9 +163,9 @@ async def scan_chat_media(req: ChatScanRequest, request: Request):
 @router.get("/api/direct/download/{chat_id}/{msg_id}")
 async def direct_stream_media(request: Request, chat_id: int, msg_id: int):
     """Stream media directly from Telegram into HTTP client without server disk writes."""
-    client = getattr(request.app.state, "tg_client", None)
+    client = await get_session_client(request, allow_jit=False)
     if not client:
-        raise HTTPException(status_code=500, detail="Telegram client not initialized")
+        raise HTTPException(status_code=401, detail="Telegram client not initialized or session not authenticated")
 
     await _ensure_connected(client)
 
@@ -194,8 +206,7 @@ async def direct_stream_media(request: Request, chat_id: int, msg_id: int):
         mime = "image/jpeg" if is_photo else "application/octet-stream"
 
     ascii_filename = (
-        filename.encode("ascii", "ignore").decode("ascii")
-        .replace("\r", "").replace("\n", "").replace('"', "").strip()
+        filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip()
         or f"file_{chat_id}_{msg_id}"
     )
     encoded_filename = quote(filename, safe="")
@@ -203,7 +214,7 @@ async def direct_stream_media(request: Request, chat_id: int, msg_id: int):
     headers = {
         "Accept-Ranges": "bytes",
         "Content-Type": mime,
-        "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        "Content-Disposition": f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}",
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "sandbox; default-src 'none'; media-src 'self'; img-src 'self'",
     }
@@ -230,9 +241,9 @@ class ZipPrepareRequest(BaseModel):
 @router.post("/api/direct/zip/prepare")
 async def prepare_zip_download(req: ZipPrepareRequest, request: Request):
     """Pre-flight validate messages, compute exact archive size, and generate a short-lived download ticket."""
-    client = getattr(request.app.state, "tg_client", None)
+    client = await get_session_client(request, allow_jit=False)
     if not client:
-        raise HTTPException(status_code=500, detail="Telegram client not initialized")
+        raise HTTPException(status_code=401, detail="Telegram client not initialized or session not authenticated")
 
     if not req.msg_ids:
         raise HTTPException(status_code=400, detail="No message IDs provided")
@@ -274,11 +285,13 @@ async def prepare_zip_download(req: ZipPrepareRequest, request: Request):
             filename = raw_name or f"file_{req.chat_id}_{mid}{ext}"
 
         file_size = int(getattr(f, "size", 0) or 0) if f else 0
-        valid_files.append({
-            "msg_id": mid,
-            "name": filename,
-            "size": file_size,
-        })
+        valid_files.append(
+            {
+                "msg_id": mid,
+                "name": filename,
+                "size": file_size,
+            }
+        )
 
     if not valid_files:
         raise HTTPException(status_code=404, detail="No downloadable media found in selected messages")
@@ -294,7 +307,10 @@ async def prepare_zip_download(req: ZipPrepareRequest, request: Request):
         archive_size=archive_size,
     )
 
-    clean_title = "".join(c for c in title if c.isalnum() or c in ("-", "_", " ")).strip().replace(" ", "_") or f"chat_{req.chat_id}"
+    clean_title = (
+        "".join(c for c in title if c.isalnum() or c in ("-", "_", " ")).strip().replace(" ", "_")
+        or f"chat_{req.chat_id}"
+    )
     suggested_filename = f"{clean_title}_archive.zip"
 
     return {
@@ -314,26 +330,28 @@ async def stream_zip_download(ticket: str, request: Request):
     if not ticket_info:
         raise HTTPException(status_code=404, detail="ZIP download ticket expired or invalid")
 
-    client = getattr(request.app.state, "tg_client", None)
+    client = await get_session_client(request, allow_jit=False)
     if not client:
-        raise HTTPException(status_code=500, detail="Telegram client not initialized")
+        raise HTTPException(status_code=401, detail="Telegram client not initialized or session not authenticated")
 
     await _ensure_connected(client)
 
     title = ticket_info.chat_title or str(ticket_info.chat_id)
-    clean_title = "".join(c for c in title if c.isalnum() or c in ("-", "_", " ")).strip().replace(" ", "_") or f"chat_{ticket_info.chat_id}"
+    clean_title = (
+        "".join(c for c in title if c.isalnum() or c in ("-", "_", " ")).strip().replace(" ", "_")
+        or f"chat_{ticket_info.chat_id}"
+    )
     filename = f"{clean_title}_archive.zip"
 
     ascii_filename = (
-        filename.encode("ascii", "ignore").decode("ascii")
-        .replace("\r", "").replace("\n", "").replace('"', "").strip()
+        filename.encode("ascii", "ignore").decode("ascii").replace("\r", "").replace("\n", "").replace('"', "").strip()
         or f"chat_{ticket_info.chat_id}_archive.zip"
     )
     encoded_filename = quote(filename, safe="")
 
     headers = {
         "Content-Type": "application/zip",
-        "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
+        "Content-Disposition": f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}",
         "Content-Length": str(ticket_info.estimated_archive_size),
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "sandbox; default-src 'none'",
