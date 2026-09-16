@@ -109,7 +109,14 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
         path = request.url.path
 
         # 1. Health check & discovery endpoints bypass (avoid setting cookies on crawlers)
-        if path.rstrip("/") in ("/api/health", "/robots.txt", "/sitemap.xml", "/llms.txt", "/llms-full.txt"):
+        if path.rstrip("/") in (
+            "/api/health",
+            "/robots.txt",
+            "/sitemap.xml",
+            "/llms.txt",
+            "/llms-full.txt",
+            "/ai-profile.json",
+        ):
             return await call_next(request)
 
         # 2. Origin check for state-changing requests
@@ -236,14 +243,52 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
         rf = static_dir / "robots.txt"
         if rf.is_file():
             return FileResponse(rf, media_type="text/plain; charset=utf-8")
-        return PlainTextResponse("User-agent: *\nAllow: /\nAllow: /app\nSitemap: https://televault.madhudadi.in/sitemap.xml\n")
+        fallback_robots = (
+            "User-agent: GPTBot\n"
+            "User-agent: ClaudeBot\n"
+            "User-agent: CCBot\n"
+            "User-agent: Bytespider\n"
+            "User-agent: anthropic-ai\n"
+            "Disallow: /\n\n"
+            "User-agent: PerplexityBot\n"
+            "User-agent: OAI-SearchBot\n"
+            "User-agent: Bingbot\n"
+            "User-agent: Google-Extended\n"
+            "User-agent: Applebot-Extended\n"
+            "Allow: /\n"
+            "Allow: /app\n"
+            "Allow: /sitemap.xml\n"
+            "Allow: /llms.txt\n"
+            "Allow: /llms-full.txt\n"
+            "Allow: /ai-profile.json\n"
+            "Disallow: /api/\n"
+            "Disallow: /ws/\n\n"
+            "User-agent: *\n"
+            "Allow: /\n"
+            "Allow: /app\n"
+            "Allow: /sitemap.xml\n"
+            "Allow: /llms.txt\n"
+            "Allow: /llms-full.txt\n"
+            "Allow: /ai-profile.json\n"
+            "Disallow: /api/\n"
+            "Disallow: /ws/\n\n"
+            "Sitemap: https://televault.madhudadi.in/sitemap.xml\n"
+        )
+        return PlainTextResponse(fallback_robots, media_type="text/plain; charset=utf-8")
 
     @app.get("/sitemap.xml")
     async def sitemap_xml() -> Response:
         sf = static_dir / "sitemap.xml"
         if sf.is_file():
             return FileResponse(sf, media_type="application/xml")
-        return PlainTextResponse('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://televault.madhudadi.in/</loc></url></urlset>', media_type="application/xml")
+        fallback_sitemap = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            "  <url><loc>https://televault.madhudadi.in/</loc></url>\n"
+            "  <url><loc>https://televault.madhudadi.in/app</loc></url>\n"
+            "</urlset>\n"
+        )
+        return PlainTextResponse(fallback_sitemap, media_type="application/xml")
 
     @app.get("/llms.txt")
     async def llms_txt() -> Response:
@@ -258,6 +303,49 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
         if lf.is_file():
             return FileResponse(lf, media_type="text/plain; charset=utf-8")
         return PlainTextResponse("# TeleVault Full Documentation\n")
+
+    @app.get("/ai-profile.json")
+    async def ai_profile_json() -> Response:
+        apf = static_dir / "ai-profile.json"
+        if apf.is_file():
+            return FileResponse(apf, media_type="application/json; charset=utf-8")
+        return JSONResponse(
+            status_code=200,
+            content={
+                "name": "TeleVault",
+                "url": "https://televault.madhudadi.in/",
+                "description": "High-performance direct browser streaming and MTProto downloader for Telegram media up to 4GB with zero server disk footprint.",
+                "publisher": {
+                    "@type": "Organization",
+                    "@id": "https://televault.madhudadi.in/#organization",
+                    "name": "TeleVault",
+                    "url": "https://televault.madhudadi.in/",
+                    "parentOrganization": {
+                        "@type": "Organization",
+                        "@id": "https://madhudadi.in/#organization",
+                        "name": "Madhu Dadi Ecosystem",
+                        "url": "https://madhudadi.in/",
+                    },
+                },
+                "author": {
+                    "@type": "Person",
+                    "@id": "https://madhudadi.in/#person",
+                    "name": "Madhu Dadi",
+                    "url": "https://madhudadi.in/profile/",
+                    "sameAs": [
+                        "https://www.wikidata.org/wiki/Q139807441",
+                        "https://github.com/madhu2456",
+                        "https://www.linkedin.com/in/madhu-dadi-54684531",
+                        "https://x.com/madhu245",
+                        "https://medium.com/@madhu.kumar245",
+                        "https://dev.to/madhudadi",
+                        "https://www.youtube.com/@madhukumar245",
+                        "https://maps.google.com/?cid=CXaUijPkQhVkEBM",
+                    ],
+                },
+            },
+            media_type="application/json",
+        )
 
     @app.get("/api/status")
     async def status(request: Request):

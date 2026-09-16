@@ -1,9 +1,34 @@
+# Model Training Scrapers (Prohibited from bulk model extraction)
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: CCBot
+User-agent: Bytespider
+User-agent: anthropic-ai
+Disallow: /
+
+# AI Search & Citation Engines (Allowed on public landing, app, and discovery docs)
+User-agent: PerplexityBot
+User-agent: OAI-SearchBot
+User-agent: Bingbot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+Allow: /
+Allow: /app
+Allow: /sitemap.xml
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /ai-profile.json
+Disallow: /api/
+Disallow: /ws/
+
+# General Search Engines & Standard Crawlers
 User-agent: *
 Allow: /
 Allow: /app
 Allow: /sitemap.xml
 Allow: /llms.txt
 Allow: /llms-full.txt
+Allow: /ai-profile.json
 Disallow: /api/
 Disallow: /ws/
 

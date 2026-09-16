@@ -5,31 +5,95 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <meta name="referrer" content="no-referrer">
-  <title>TeleVault | Stream &amp; Download Telegram Files Online (2GB+)</title>
-  <meta name="description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+  <title>TeleVault | Telegram File Downloader Online (2GB-4GB)</title>
+  <meta name="description" content="Download Telegram files, videos, and channels up to 4GB online with direct browser streaming, instant ZIP export, and zero server storage. Free and open source.">
   <link rel="canonical" href="https://televault.madhudadi.in/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://televault.madhudadi.in/">
-  <meta property="og:title" content="TeleVault | Stream &amp; Download Telegram Files Online (2GB+)">
-  <meta property="og:description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+  <meta property="og:title" content="TeleVault | Telegram File Downloader Online (2GB-4GB)">
+  <meta property="og:description" content="Download Telegram files, videos, and channels up to 4GB online with direct browser streaming, instant ZIP export, and zero server storage. Free and open source.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://televault.madhudadi.in/">
-  <meta name="twitter:title" content="TeleVault | Stream &amp; Download Telegram Files Online (2GB+)">
-  <meta name="twitter:description" content="Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage. Try TeleVault today.">
+  <meta name="twitter:title" content="TeleVault | Telegram File Downloader Online (2GB-4GB)">
+  <meta name="twitter:description" content="Download Telegram files, videos, and channels up to 4GB online with direct browser streaming, instant ZIP export, and zero server storage. Free and open source.">
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@graph": [
       {
+        "@type": "Organization",
+        "@id": "https://televault.madhudadi.in/#organization",
+        "name": "TeleVault",
+        "url": "https://televault.madhudadi.in/",
+        "parentOrganization": {
+          "@type": "Organization",
+          "@id": "https://madhudadi.in/#organization",
+          "name": "Madhu Dadi Ecosystem",
+          "url": "https://madhudadi.in/"
+        },
+        "founder": {
+          "@type": "Person",
+          "@id": "https://madhudadi.in/#person"
+        }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://madhudadi.in/#person",
+        "name": "Madhu Dadi",
+        "url": "https://madhudadi.in/profile/",
+        "sameAs": [
+          "https://www.wikidata.org/wiki/Q139807441",
+          "https://github.com/madhu2456",
+          "https://www.linkedin.com/in/madhu-dadi-54684531",
+          "https://x.com/madhu245",
+          "https://medium.com/@madhu.kumar245",
+          "https://dev.to/madhudadi",
+          "https://www.youtube.com/@madhukumar245",
+          "https://maps.google.com/?cid=CXaUijPkQhVkEBM"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://televault.madhudadi.in/#website",
+        "name": "TeleVault",
+        "url": "https://televault.madhudadi.in/",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://televault.madhudadi.in/#organization"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://madhudadi.in/#website",
+          "name": "Madhu Dadi Ecosystem",
+          "url": "https://madhudadi.in/"
+        }
+      },
+      {
         "@type": "WebApplication",
         "@id": "https://televault.madhudadi.in/#webapp",
         "name": "TeleVault",
-        "url": "https://televault.madhudadi.in/",
+        "url": "https://televault.madhudadi.in/app",
         "applicationCategory": "MultimediaApplication",
         "operatingSystem": "All",
         "browserRequirements": "Requires JavaScript. Requires HTML5.",
-        "description": "Download Telegram files, videos, and channels up to 4GB online. Direct browser streaming, instant ZIP export, and 0 server disk storage.",
+        "description": "Download Telegram files, videos, and channels up to 4GB online with direct browser streaming, instant ZIP export, and zero server storage. Free and open source.",
+        "author": {
+          "@type": "Person",
+          "@id": "https://madhudadi.in/#person"
+        },
+        "creator": {
+          "@type": "Person",
+          "@id": "https://madhudadi.in/#person"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://televault.madhudadi.in/#organization"
+        },
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://televault.madhudadi.in/#website"
+        },
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -79,7 +143,7 @@
             "name": "Does TeleVault store my downloaded files or chat history on its servers?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram's MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage."
+              "text": "No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage."
             }
           },
           {
@@ -87,7 +151,7 @@
             "name": "How does TeleVault stream files directly to the browser?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "TeleVault connects directly to Telegram's distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading."
+              "text": "TeleVault connects directly to Telegram distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading."
             }
           },
           {
@@ -842,6 +906,7 @@
       line-height: 1.6;
     }
 
+    .faq-answer,
     .faq-answer p {
       margin: 0;
     }
@@ -885,9 +950,38 @@
 
     .footer-grid {
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr;
+      grid-template-columns: 2fr 1fr 1fr 1.2fr;
       gap: 2.5rem;
       margin-bottom: 2.5rem;
+    }
+
+    .adticks-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(0, 229, 255, 0.06);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      color: var(--accent-cyan);
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .adticks-badge:hover {
+      background: rgba(0, 229, 255, 0.12);
+      border-color: var(--accent-cyan);
+      color: var(--text-primary);
+    }
+
+    .adticks-badge svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+      flex-shrink: 0;
     }
 
     .footer-brand h4 {
@@ -1382,44 +1476,32 @@
         <div class="faq-list">
           <details class="faq-item">
             <summary class="faq-question">Can I download Telegram files larger than 2GB without Telegram Premium?</summary>
-            <div class="faq-answer">
-              <p>Standard Telegram accounts can download files up to 2GB, while Telegram Premium accounts can download files up to 4GB. TeleVault supports the maximum file size permitted by your Telegram account tier through direct MTProto multi-part chunk streaming.</p>
-            </div>
+            <p class="faq-answer">Standard Telegram accounts can download files up to 2GB, while Telegram Premium accounts can download files up to 4GB. TeleVault supports the maximum file size permitted by your Telegram account tier through direct MTProto multi-part chunk streaming.</p>
           </details>
 
           <details class="faq-item">
             <summary class="faq-question">Does TeleVault store my downloaded files or chat history on its servers?</summary>
-            <div class="faq-answer">
-              <p>No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram's MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage.</p>
-            </div>
+            <p class="faq-answer">No. TeleVault features a 100% zero-disk-storage streaming architecture. Media packets are streamed directly from Telegram MTProto servers through ephemeral memory buffers to your browser, so no files are ever written to server disk storage.</p>
           </details>
 
           <details class="faq-item">
             <summary class="faq-question">How does TeleVault stream files directly to the browser?</summary>
-            <div class="faq-answer">
-              <p>TeleVault connects directly to Telegram's distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading.</p>
-            </div>
+            <p class="faq-answer">TeleVault connects directly to Telegram distributed data centers via MTProto. When you request a file, TeleVault fetches chunks sequentially and streams them using HTTP chunked transfer and RFC 7233 range requests, allowing instant browser playback and downloading.</p>
           </details>
 
           <details class="faq-item">
             <summary class="faq-question">Can I download multiple Telegram files together as a single ZIP?</summary>
-            <div class="faq-answer">
-              <p>Yes. TeleVault features an on-the-fly streaming ZIP engine. You can select multiple media files or documents in any chat or channel, and TeleVault packages them into an uncompressed ZIP archive stream in real time without creating temporary files on the server.</p>
-            </div>
+            <p class="faq-answer">Yes. TeleVault features an on-the-fly streaming ZIP engine. You can select multiple media files or documents in any chat or channel, and TeleVault packages them into an uncompressed ZIP archive stream in real time without creating temporary files on the server.</p>
           </details>
 
           <details class="faq-item">
             <summary class="faq-question">Is it safe to log in with my Telegram account on TeleVault?</summary>
-            <div class="faq-answer">
-              <p>Yes. TeleVault uses official Telegram MTProto authentication via QR code scanning or SMS verification code with optional 2FA. Your session is protected by an isolated 256-bit visitor session cookie, and TeleVault never exposes your credentials.</p>
-            </div>
+            <p class="faq-answer">Yes. TeleVault uses official Telegram MTProto authentication via QR code scanning or SMS verification code with optional 2FA. Your session is protected by an isolated 256-bit visitor session cookie, and TeleVault never exposes your credentials.</p>
           </details>
 
           <details class="faq-item">
             <summary class="faq-question">How is TeleVault different from Telegram downloader bots?</summary>
-            <div class="faq-answer">
-              <p>Traditional Telegram bots run into severe file size limitations (often 20MB or 50MB for bots), download files to intermediate third-party servers, and throttle download speeds. TeleVault acts as a direct client connecting directly to Telegram MTProto, enabling full bandwidth, 2GB to 4GB downloads, and zero intermediate server storage.</p>
-            </div>
+            <p class="faq-answer">Traditional Telegram bots run into severe file size limitations (often 20MB or 50MB for bots), download files to intermediate third-party servers, and throttle download speeds. TeleVault acts as a direct client connecting directly to Telegram MTProto, enabling full bandwidth, 2GB to 4GB downloads, and zero intermediate server storage.</p>
           </details>
         </div>
       </div>
@@ -1459,6 +1541,18 @@
           </ul>
         </div>
         <div class="footer-col">
+          <h5>Ecosystem</h5>
+          <ul>
+            <li><a href="https://madhudadi.in/" target="_blank" rel="noopener noreferrer me">Madhu Dadi Ecosystem</a></li>
+            <li><a href="https://madhudadi.in/profile/" target="_blank" rel="noopener noreferrer me">Founder Profile</a></li>
+            <li><a href="https://adticks.madhudadi.in/" target="_blank" rel="noopener noreferrer">Adticks Analytics</a></li>
+          </ul>
+          <a href="https://adticks.madhudadi.in/" target="_blank" rel="noopener noreferrer" class="adticks-badge" aria-label="Adticks Verified Ecosystem Member">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Adticks Verified</span>
+          </a>
+        </div>
+        <div class="footer-col">
           <h5>Open Source</h5>
           <ul>
             <li><a href="https://github.com/madhu2456/TelegramFilesDownloader" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
@@ -1466,12 +1560,13 @@
             <li><a href="/sitemap.xml">Sitemap</a></li>
             <li><a href="/llms.txt">LLM Docs</a></li>
             <li><a href="/llms-full.txt">Full Tech Spec</a></li>
+            <li><a href="/ai-profile.json">AI Profile</a></li>
           </ul>
         </div>
       </div>
       <div class="footer-bottom">
         <div>&copy; 2026 TeleVault. Released under the MIT License.</div>
-        <div style="font-size:0.8rem; color:var(--text-tertiary);">Designed for high-speed Telegram media workflows.</div>
+        <div style="font-size:0.8rem; color:var(--text-tertiary);">Engineered by <a href="https://madhudadi.in/profile/" target="_blank" rel="noopener noreferrer me" style="color:var(--text-secondary); text-decoration:underline;">Madhu Dadi</a>.</div>
       </div>
     </div>
   </footer>

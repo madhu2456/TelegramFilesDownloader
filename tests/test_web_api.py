@@ -1132,8 +1132,18 @@ def test_landing_page_routing_and_discovery_endpoints():
     assert "text/plain" in res_robots.headers.get("content-type", "")
     assert "User-agent:" in res_robots.text
     assert "Allow: /app" in res_robots.text
+    assert "GPTBot" in res_robots.text
+    assert "PerplexityBot" in res_robots.text
+    assert "Disallow: /api/" in res_robots.text
+    assert "Disallow: /ws/" in res_robots.text
     # Discovery endpoints must NOT have Set-Cookie header (crawler isolation)
     assert "set-cookie" not in res_robots.headers
+
+    res_ai = client.get("/ai-profile.json")
+    assert res_ai.status_code == 200
+    assert "application/json" in res_ai.headers.get("content-type", "")
+    assert res_ai.json().get("name") == "TeleVault"
+    assert "set-cookie" not in res_ai.headers
 
     res_sitemap = client.get("/sitemap.xml")
     assert res_sitemap.status_code == 200
@@ -1298,7 +1308,7 @@ def test_landing_page_fallback_routing(monkeypatch):
 
     # Case 3: Discovery files missing, fallback to inline default responses
     def fake_is_file_no_discovery(self: Path) -> bool:
-        if self.name in ("robots.txt", "sitemap.xml", "llms.txt", "llms-full.txt"):
+        if self.name in ("robots.txt", "sitemap.xml", "llms.txt", "llms-full.txt", "ai-profile.json"):
             return False
         return orig_is_file(self)
 
@@ -1320,5 +1330,10 @@ def test_landing_page_fallback_routing(monkeypatch):
     res_llms_full = client.get("/llms-full.txt")
     assert res_llms_full.status_code == 200
     assert "# TeleVault Full Documentation" in res_llms_full.text
+
+    res_ai = client.get("/ai-profile.json")
+    assert res_ai.status_code == 200
+    assert "application/json" in res_ai.headers.get("content-type", "")
+    assert res_ai.json().get("name") == "TeleVault"
 
 

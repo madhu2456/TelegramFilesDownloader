@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Feature: Ecosystem SEO, AEO & GEO Knowledge Graph Integration**:
+  - Multi-entity Schema.org JSON-LD `@graph` linking `Organization` (`#organization`), `parentOrganization` (`https://madhudadi.in/#organization`), `founder` (`https://madhudadi.in/#person`), `Person`, `WebSite`, `WebApplication`, `BreadcrumbList`, and `FAQPage`.
+  - Integrated Fix #8 Canonical Identity Anchors: exactly 8 canonical URLs for Madhu Dadi with zero product domain pollution in `sameAs`.
+  - Added `/ai-profile.json` machine discovery endpoint with session cookie suppression in `security_middleware`.
+  - Hardened `robots.txt` per RFC 9309 separating model-training scrapers (`GPTBot`, `ClaudeBot`, etc. -> `Disallow: /`) from AI search/citation bots (`PerplexityBot`, `OAI-SearchBot`, etc. -> `Allow: /`, `Allow: /app`) while repeating sensitive endpoint blocks (`/api/`, `/ws/`).
+  - Upgraded landing page footer to a 4-column responsive grid featuring an "Ecosystem" column with bidirectional `rel="noopener noreferrer me"` links to Madhu Dadi Hub & Profile, and an inline SVG Adticks citation badge.
+  - Ensured 100% plain text parity between visible DOM FAQs and Schema.org `FAQPage`.
+- **Testing**: Added `tests/test_identity_anchors.py` and `tests/test_org_jsonld.py`, expanded `tests/test_web_api.py` with discovery endpoint and crawler cookie isolation tests. All 160 tests passing!
 - **Marketing Landing Page & Routing Split**: Added dedicated public landing page (`landing.html`) at `GET /` with Obsidian Dark Glassmorphism, 9-section architecture (Navbar, Hero, Interactive Simulation HUD, Bento Grid Features, Comparison Matrix, Architecture Steps, Semantic FAQ Accordion, Bottom CTA Banner, and Semantic Footer), and primary CTA driving visitors directly to the web dashboard at `GET /app`.
 - **SERP SEO & Discovery Infrastructure**: Integrated Schema.org JSON-LD (`WebApplication`, `FAQPage`, `BreadcrumbList`), technical discovery endpoints (`/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt`), strict-budget meta tags, and CDN-friendly crawler cookie isolation preventing unnecessary session cookie issuance on search engine and LLM crawlers.
 - **WCAG 2.2 AAA & Responsive Containment**: Implemented high-contrast tokens (12.56:1 CTA contrast ratio), full responsive mobile 375px containment with `box-sizing: border-box` and horizontal clipping, and zero external CDN dependencies using native system font stacks.

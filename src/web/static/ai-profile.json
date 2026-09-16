@@ -1,0 +1,52 @@
+{
+  "@context": "https://schema.org",
+  "schema_version": "1.0",
+  "name": "TeleVault",
+  "canonical_url": "https://televault.madhudadi.in/",
+  "description": "High-performance direct browser streaming and MTProto downloader for Telegram media up to 4GB with zero server disk footprint.",
+  "publisher": {
+    "@type": "Organization",
+    "@id": "https://televault.madhudadi.in/#organization",
+    "name": "TeleVault",
+    "url": "https://televault.madhudadi.in/",
+    "parentOrganization": {
+      "@type": "Organization",
+      "@id": "https://madhudadi.in/#organization",
+      "name": "Madhu Dadi Ecosystem",
+      "url": "https://madhudadi.in/"
+    }
+  },
+  "author": {
+    "@type": "Person",
+    "@id": "https://madhudadi.in/#person",
+    "name": "Madhu Dadi",
+    "url": "https://madhudadi.in/profile/",
+    "sameAs": [
+      "https://www.wikidata.org/wiki/Q139807441",
+      "https://github.com/madhu2456",
+      "https://www.linkedin.com/in/madhu-dadi-54684531",
+      "https://x.com/madhu245",
+      "https://medium.com/@madhu.kumar245",
+      "https://dev.to/madhudadi",
+      "https://www.youtube.com/@madhukumar245",
+      "https://maps.google.com/?cid=CXaUijPkQhVkEBM"
+    ]
+  },
+  "capabilities": [
+    "Direct browser streaming via MTProto chunked transfer",
+    "Zero server disk storage architecture",
+    "On-the-fly streaming ZIP packaging",
+    "Telegram Premium up to 4GB file downloads",
+    "Multi-tenant visitor session isolation with QR and SMS authentication",
+    "SQLite metadata indexing and download manifest tracking"
+  ],
+  "endpoints": {
+    "landing": "https://televault.madhudadi.in/",
+    "webapp": "https://televault.madhudadi.in/app",
+    "robots": "https://televault.madhudadi.in/robots.txt",
+    "sitemap": "https://televault.madhudadi.in/sitemap.xml",
+    "llms_summary": "https://televault.madhudadi.in/llms.txt",
+    "llms_full": "https://televault.madhudadi.in/llms-full.txt",
+    "ai_profile": "https://televault.madhudadi.in/ai-profile.json"
+  }
+}

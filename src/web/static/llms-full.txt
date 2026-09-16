@@ -2,8 +2,10 @@
 
 > TeleVault is a high-performance web platform and CLI engine for streaming and downloading files from Telegram channels, groups, and direct chats using direct MTProto streaming and real-time chunked transfer.
 
-## 1. System Overview
+## 1. System Overview & Ecosystem Context
 TeleVault acts as a direct bridge between Telegram's MTProto network and modern web browsers. Traditional Telegram download bots download files to a bot server's local disk first, bottlenecking at server disk space and bandwidth before serving files to users. TeleVault bypasses intermediate disk storage completely by streaming chunks directly from Telegram's data centers through FastAPI chunked transfer directly into the client's browser.
+
+TeleVault is engineered by [Madhu Dadi](https://madhudadi.in/profile/) and operates as an integrated property within the [Madhu Dadi Ecosystem](https://madhudadi.in/#organization). Machine discovery and AEO parameters are declared in [/ai-profile.json](https://televault.madhudadi.in/ai-profile.json).
 
 ## 2. Core Features & Capabilities
 - **Direct MTProto Browser Streaming**: Media chunks are fetched via Telethon/MTProto and streamed to client HTTP responses with standard HTTP 206 Partial Content Range support (enabling seeking in 4K/1080p video players).
@@ -21,6 +23,11 @@ TeleVault acts as a direct bridge between Telegram's MTProto network and modern 
 ## 4. Key Endpoints & Routes
 - `GET /`: High-converting landing page with technical feature breakdown, comparison matrix, interactive dashboard simulation, and Schema.org structured data.
 - `GET /app`: Full multi-tenant web application dashboard for Telegram file exploration, streaming, and downloading.
+- `GET /ai-profile.json`: Machine-readable AI profile and capabilities manifest.
+- `GET /robots.txt`: RFC 9309 search crawler indexing policy.
+- `GET /sitemap.xml`: XML sitemap for search engines.
+- `GET /llms.txt`: Summary documentation for AI models.
+- `GET /llms-full.txt`: Full technical documentation for AI models.
 - `GET /api/health`: Health check endpoint.
 - `GET /api/status`: System and authentication status.
 - `POST /api/auth/phone/send_code`: Phone login initialization.
@@ -31,12 +38,10 @@ TeleVault acts as a direct bridge between Telegram's MTProto network and modern 
 - `GET /api/download/direct`: Direct single-file MTProto stream.
 - `POST /api/download/direct_zip`: On-the-fly multi-file ZIP stream.
 - `WS /ws/live`: Real-time download progress and HUD telemetry.
-- `GET /robots.txt`: Search crawler indexing policy.
-- `GET /sitemap.xml`: XML sitemap for search engines.
-- `GET /llms.txt`: Summary documentation for AI models.
-- `GET /llms-full.txt`: Full technical documentation for AI models.
 
 ## 5. Deployment & Open Source
+- **Founder**: [Madhu Dadi](https://madhudadi.in/profile/)
+- **Parent Organization**: [Madhu Dadi Ecosystem](https://madhudadi.in/#organization)
 - **Repository**: https://github.com/madhu2456/TelegramFilesDownloader
 - **Production Host**: https://televault.madhudadi.in/
 - **License**: MIT
