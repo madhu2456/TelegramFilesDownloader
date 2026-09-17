@@ -153,9 +153,12 @@ async def websocket_live(websocket: WebSocket):
     try:
         await websocket.send_json({"type": "INIT_STATE", "state": jm.get_snapshot(), "logs": jm.get_recent_logs()})
         while True:
-            event = await q.get()
-            await websocket.send_json(event)
-    except (WebSocketDisconnect, ConnectionResetError, asyncio.CancelledError):
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=25.0)
+                await websocket.send_json(event)
+            except TimeoutError:
+                await websocket.send_json({"type": "PING"})
+    except (WebSocketDisconnect, ConnectionError, asyncio.CancelledError):
         pass
     finally:
         jm.unsubscribe(q)

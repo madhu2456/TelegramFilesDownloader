@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Master Audit v8.6 Hardening**:
+  - **RFC 7233 Range Streaming**: Full support for `Range: bytes=start-end`, `bytes=start-`, `bytes=-suffix`, and single-byte `bytes=0-0` queries yielding `HTTP 206 Partial Content` with `Content-Range` and `Content-Length`. Malformed and unsatisfiable ranges return `HTTP 416 Range Not Satisfiable` with `Content-Range: bytes */{size}`. Dynamic MTProto chunk buffer bounded to <= 512KB.
+  - **WebSocket Telemetry HUD Keepalive**: 25.0s heartbeat pings (`{"type": "PING"}`) on `/ws/live` preventing Cloudflare (100s) and Nginx (60s) `1006 Abnormal Closure`. Silent client-side routing in `app.js`.
+  - **Machine Discovery Cookie Suppression**: Stripped `Set-Cookie` headers and suppressed session issuance on `/.well-known/*` endpoints to protect CDN edge caches.
+  - **MTProto Session Permission Hardening**: Enforced `0o600` permissions on session SQLite files (`src/store.py`) with POSIX error fallback, and process-wide `os.umask(0o077)` on startup (`src/web/app.py`).
+  - **512KB Buffer Cap Alignment**: Standardized all internal buffer allocations in `src/web/routes_media.py` to `512 * 1024` bytes.
+  - **Schema.org WebApplication Markup**: Injected valid JSON-LD structured data into `/app` dashboard `<head>` linking author to `https://madhudadi.in/#person` and publisher to `https://televault.madhudadi.in/#organization`.
+  - **W3C APG FAQ Accordion Keyboard Semantics**: Attached `ArrowDown`, `ArrowUp`, `Home`, `End` keyboard navigation listeners to `.faq-question` in `landing.html`.
+  - **Automated Test Suite Expansion**: Added range query tests (start-end, suffix, single-byte, unsatisfiable) and JSON-LD markup tests (165/165 tests green).
 - **Feature: Ecosystem SEO, AEO & GEO Knowledge Graph Integration**:
   - Multi-entity Schema.org JSON-LD `@graph` linking `Organization` (`#organization`), `parentOrganization` (`https://madhudadi.in/#organization`), `founder` (`https://madhudadi.in/#person`), `Person`, `WebSite`, `WebApplication`, `BreadcrumbList`, and `FAQPage`.
   - Integrated Fix #8 Canonical Identity Anchors: exactly 8 canonical URLs for Madhu Dadi with zero product domain pollution in `sameAs`.

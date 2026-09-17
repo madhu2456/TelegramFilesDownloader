@@ -15,7 +15,7 @@ from src.web.client_helpers import (
     _resolve_peer_robust,
     get_session_client,
 )
-from src.web.routes_media import classify_mime
+from src.web.routes_media import classify_mime, parse_range_header
 from src.web.zip_stream import (
     StreamingZipBuilder,
     calculate_archive_size,
@@ -220,6 +220,40 @@ async def direct_stream_media(request: Request, chat_id: int, msg_id: int):
     }
     if file_size > 0:
         headers["Content-Length"] = str(file_size)
+
+    range_header = request.headers.get("range")
+    if range_header:
+        if file_size == 0:
+            raise HTTPException(
+                status_code=416,
+                headers={"Content-Range": f"bytes */{file_size}"},
+                detail="Range Not Satisfiable",
+            )
+        parsed_range = parse_range_header(range_header, file_size)
+        if parsed_range is not None:
+            start, end = parsed_range
+            chunk_size = end - start + 1
+            headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            headers["Content-Length"] = str(chunk_size)
+
+            async def range_chunk_generator() -> AsyncGenerator[bytes, None]:
+                req_size = min(512 * 1024, max(4096, chunk_size))
+                stream = client.iter_download(m.media, offset=start, request_size=req_size)
+                bytes_left = chunk_size
+                try:
+                    async for chunk in stream:
+                        if not chunk or bytes_left <= 0:
+                            break
+                        if len(chunk) > bytes_left:
+                            yield chunk[:bytes_left]
+                            bytes_left = 0
+                            break
+                        yield chunk
+                        bytes_left -= len(chunk)
+                except (asyncio.CancelledError, ConnectionResetError, BrokenPipeError):
+                    return
+
+            return StreamingResponse(range_chunk_generator(), status_code=206, headers=headers)
 
     async def chunk_generator() -> AsyncGenerator[bytes, None]:
         try:

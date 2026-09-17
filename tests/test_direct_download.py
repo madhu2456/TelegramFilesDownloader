@@ -83,10 +83,15 @@ class MockTgClient:
                 return m
         return None
 
-    def iter_download(self, file_media, request_size=512 * 1024):
+    def iter_download(self, file_media, offset=None, request_size=512 * 1024):
         async def _stream():
-            yield b"TELEVAULT_DIRECT_STREAM_CHUNK_1_"
-            yield b"TELEVAULT_DIRECT_STREAM_CHUNK_2_"
+            if offset is not None:
+                data = b"0123456789" * 500
+                start_off = offset or 0
+                yield data[start_off:]
+            else:
+                yield b"TELEVAULT_DIRECT_STREAM_CHUNK_1_"
+                yield b"TELEVAULT_DIRECT_STREAM_CHUNK_2_"
         return _stream()
 
 
@@ -205,3 +210,48 @@ def test_direct_download_not_found(direct_client):
         headers={"X-Auth-Token": token},
     )
     assert res.status_code == 404
+
+
+def test_direct_download_range_start_end(direct_client):
+    client, token, _ = direct_client
+    res = client.get(
+        "/api/direct/download/12345/101",
+        headers={"X-Auth-Token": token, "Range": "bytes=0-499"},
+    )
+    assert res.status_code == 206
+    assert res.headers["Content-Range"] == "bytes 0-499/5000"
+    assert res.headers["Content-Length"] == "500"
+    assert len(res.content) == 500
+
+
+def test_direct_download_range_suffix(direct_client):
+    client, token, _ = direct_client
+    res = client.get(
+        "/api/direct/download/12345/101",
+        headers={"X-Auth-Token": token, "Range": "bytes=-4000"},
+    )
+    assert res.status_code == 206
+    assert res.headers["Content-Range"] == "bytes 1000-4999/5000"
+    assert res.headers["Content-Length"] == "4000"
+    assert res.content == (b"0123456789" * 500)[1000:5000]
+
+
+def test_direct_download_range_unsatisfiable(direct_client):
+    client, token, _ = direct_client
+    res = client.get(
+        "/api/direct/download/12345/101",
+        headers={"X-Auth-Token": token, "Range": "bytes=5000-6000"},
+    )
+    assert res.status_code == 416
+    assert res.headers["Content-Range"] == "bytes */5000"
+
+def test_direct_download_range_single_byte(direct_client):
+    client, token, _ = direct_client
+    res = client.get(
+        "/api/direct/download/12345/101",
+        headers={"X-Auth-Token": token, "Range": "bytes=0-0"},
+    )
+    assert res.status_code == 206
+    assert res.headers["Content-Range"] == "bytes 0-0/5000"
+    assert res.headers["Content-Length"] == "1"
+    assert res.content == b"0"

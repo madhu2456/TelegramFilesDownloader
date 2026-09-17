@@ -1,6 +1,7 @@
 """SQLite manifest: expand-only, up-down-up compatible (down=no-op)."""
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -49,12 +50,13 @@ def harden_sqlite_session(session_path: Path | str) -> None:
     sp = Path(session_path)
     if sp.exists() and sp.is_file():
         try:
+            os.chmod(sp, 0o600)
             conn = sqlite3.connect(str(sp))
             conn.execute("PRAGMA busy_timeout=10000;")
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA synchronous=NORMAL;")
             conn.close()
-        except sqlite3.OperationalError:
+        except (sqlite3.OperationalError, OSError):
             pass
 
 

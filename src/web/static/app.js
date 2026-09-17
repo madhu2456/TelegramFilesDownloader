@@ -283,6 +283,9 @@ function connectWebSocket() {
 }
 
 function handleWsEvent(data) {
+  if (data.type === 'PING') {
+    return; // Keepalive frame; no state mutation
+  }
   if (data.type === 'SESSION_EXPIRED' || data.type === 'ORIGIN_FORBIDDEN') {
     if (token) {
       sessionStorage.removeItem('tele_vault_token');

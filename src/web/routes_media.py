@@ -49,7 +49,9 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, i
     s_str, e_str = parts[0].strip(), parts[1].strip()
     try:
         if s_str == "":
-            length = int(e_str) if e_str.isdigit() else 0
+            if not e_str.isdigit():
+                return None
+            length = int(e_str)
             start = max(0, file_size - length)
             end = file_size - 1
         elif e_str == "":
@@ -210,6 +212,12 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
     }
 
     if file_size == 0:
+        if range_header:
+            raise HTTPException(
+                status_code=416,
+                headers={"Content-Range": "bytes */0"},
+                detail="Range Not Satisfiable",
+            )
         common_headers["Content-Length"] = "0"
         return StreamingResponse(iter([]), status_code=200, headers=common_headers)
 
@@ -217,7 +225,7 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
 
         def iter_full():
             with open(target_file, "rb") as f:
-                while chunk := f.read(1024 * 1024):
+                while chunk := f.read(512 * 1024):
                     yield chunk
 
         common_headers["Content-Length"] = str(file_size)
@@ -231,7 +239,7 @@ async def stream_media(request: Request, chat_id: int, msg_id: int):
             f.seek(start)
             remaining = chunk_size
             while remaining > 0:
-                chunk = f.read(min(remaining, 1024 * 1024))
+                chunk = f.read(min(remaining, 512 * 1024))
                 if not chunk:
                     break
                 remaining -= len(chunk)

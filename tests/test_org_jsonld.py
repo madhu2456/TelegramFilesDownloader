@@ -49,3 +49,19 @@ def test_schema_graph_topology():
     assert webapp.get("creator", {}).get("@id") == "https://madhudadi.in/#person"
     assert webapp.get("publisher", {}).get("@id") == "https://televault.madhudadi.in/#organization"
     assert webapp.get("isPartOf", {}).get("@id") == "https://televault.madhudadi.in/#website"
+
+
+def test_app_schema_webapp_markup():
+    """Validates Schema.org WebApplication markup in /app (index.html)."""
+    index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    json_ld_match = re.search(r'<script type="application/ld\+json">(.*?)</script>', index_html, re.DOTALL)
+    assert json_ld_match is not None, "JSON-LD script missing in index.html"
+
+    data = json.loads(json_ld_match.group(1))
+    assert data.get("@context") == "https://schema.org"
+    assert data.get("@type") == "WebApplication"
+    assert data.get("@id") == "https://televault.madhudadi.in/#webapp"
+    assert data.get("name") == "TeleVault"
+    assert data.get("url") == "https://televault.madhudadi.in/app"
+    assert data.get("applicationCategory") == "MultimediaApplication"
+    assert data.get("author", {}).get("@id") == "https://madhudadi.in/#person"

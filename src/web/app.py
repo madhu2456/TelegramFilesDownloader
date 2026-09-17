@@ -52,6 +52,7 @@ def get_client_ip(request: Request) -> str:
 
 
 def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> FastAPI:
+    os.umask(0o077)
     if get_ephemeral_token() is None:
         init_security()
 
@@ -109,7 +110,7 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
         path = request.url.path
 
         # 1. Health check & discovery endpoints bypass (avoid setting cookies on crawlers)
-        if path.rstrip("/") in (
+        if path == "/.well-known" or path.startswith("/.well-known/") or path.rstrip("/") in (
             "/api/health",
             "/robots.txt",
             "/sitemap.xml",
@@ -117,7 +118,12 @@ def create_app(cfg: Config | None = None, out_dir: str | Path | None = None) -> 
             "/llms-full.txt",
             "/ai-profile.json",
         ):
-            return await call_next(request)
+            response = await call_next(request)
+            if hasattr(response.headers, "pop"):
+                response.headers.pop("set-cookie", None)
+            elif "set-cookie" in response.headers:
+                del response.headers["set-cookie"]
+            return response
 
         # 2. Origin check for state-changing requests
         if request.method in ("POST", "PUT", "DELETE", "PATCH"):
